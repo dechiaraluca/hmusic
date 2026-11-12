@@ -67,12 +67,24 @@ public class MoodPad extends JComponent {
         addMouseListener(ma);
         addMouseMotionListener(ma);
 
-        new Timer(33, e -> {
-            if (pulse > 0.01f) {
-                pulse *= 0.85f;
-                repaint();
-            }
-        }).start();
+    }
+
+    private final Timer anim = new Timer(33, e -> {
+        if (pulse > 0.01f) {
+            pulse *= 0.85f;
+            repaint();
+        }
+    });
+
+    // l'animation ne tourne que lorsque le composant est affiché dans une fenêtre
+    @Override public void addNotify() {
+        super.addNotify();
+        anim.start();
+    }
+
+    @Override public void removeNotify() {
+        anim.stop();
+        super.removeNotify();
     }
 
     private void pick(Mood m, boolean adjusting) {

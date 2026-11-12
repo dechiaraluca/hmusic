@@ -49,7 +49,19 @@ public class Visualizer extends JComponent implements EngineListener {
     public Visualizer() {
         setOpaque(false);
         setPreferredSize(new Dimension(520, 420));
-        new Timer(16, e -> animate()).start();
+    }
+
+    private final Timer anim = new Timer(16, e -> animate());
+
+    // l'animation ne tourne que lorsque le composant est affiché dans une fenêtre
+    @Override public void addNotify() {
+        super.addNotify();
+        anim.start();
+    }
+
+    @Override public void removeNotify() {
+        anim.stop();
+        super.removeNotify();
     }
 
     /** Appelé depuis le thread audio : on se contente de mettre l'évènement en file. */

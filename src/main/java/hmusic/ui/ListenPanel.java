@@ -55,6 +55,27 @@ public class ListenPanel extends JPanel implements ListenController.View {
         nowPlaying.setMood(m);
     }
 
+    /** Ce qu'un auditeur peut faire sur le morceau en cours (favoris, abonnements). */
+    public interface ActionsAuditeur {
+        boolean estFavori(Morceau m);
+
+        void basculerFavori(Morceau m);
+
+        boolean estArtisteFavori(String artiste);
+
+        void basculerArtisteFavori(String artiste);
+
+        boolean estAbonne(String artiste);
+
+        void basculerAbonnement(String artiste);
+    }
+
+    /** @param actions null si l'utilisateur connecté n'est pas un auditeur (boutons masqués) */
+    public void setActionsAuditeur(ActionsAuditeur actions) {
+        nowPlaying.actionsAuditeur = actions;
+        nowPlaying.repaint();
+    }
+
     // ================================================================== écran de connexion
 
     private JComponent buildKeySetup() {
@@ -173,24 +194,42 @@ public class ListenPanel extends JPanel implements ListenController.View {
         private boolean playing;
         private String status = " ";
         private boolean statusError;
-        private Rectangle linkBounds;
+        private ActionsAuditeur actionsAuditeur;
+        /** Zones cliquables dessinées (boutons d'action). */
+        private record Hit(Rectangle zone, Runnable action) {}
+        private final List<Hit> hits = new ArrayList<>();
+        private final Timer anim = new Timer(16, e -> animate());
 
         NowPlaying() {
             setOpaque(false);
-            new Timer(16, e -> animate()).start();
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
-                    if (linkBounds != null && linkBounds.contains(e.getPoint()) && track != null && track.urlJamendo() != null) {
-                        Theme.openLink(track.urlJamendo());
+                    for (Hit h : List.copyOf(hits)) {
+                        if (h.zone().contains(e.getPoint())) {
+                            h.action().run();
+                            repaint();
+                            return;
+                        }
                     }
                 }
             });
             addMouseMotionListener(new MouseAdapter() {
                 @Override public void mouseMoved(MouseEvent e) {
-                    boolean onLink = linkBounds != null && linkBounds.contains(e.getPoint());
-                    setCursor(Cursor.getPredefinedCursor(onLink ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+                    boolean onHit = hits.stream().anyMatch(h -> h.zone().contains(e.getPoint()));
+                    setCursor(Cursor.getPredefinedCursor(onHit ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
                 }
             });
+        }
+
+        // l'animation ne tourne que lorsque le composant est affiché dans une fenêtre
+        @Override public void addNotify() {
+            super.addNotify();
+            anim.start();
+        }
+
+        @Override public void removeNotify() {
+            anim.stop();
+            super.removeNotify();
         }
 
         void setMood(Mood m) {
@@ -302,7 +341,7 @@ public class ListenPanel extends JPanel implements ListenController.View {
         }
 
         private void paintEmpty(Graphics2D g, int w, int h) {
-            linkBounds = null;
+            hits.clear();
             g.setFont(Theme.font(Font.BOLD, 24));
             g.setColor(Theme.TEXT);
             String t1 = "Tes vraies musiques, selon ton humeur";
@@ -362,18 +401,48 @@ public class ListenPanel extends JPanel implements ListenController.View {
                 if (cx + cw > tx + maxW) break;
                 cx += drawChip(g, tag, cx, y) + 6;
             }
-            y += 24 + 24;
-            // lien (seulement s'il reste de la place)
-            linkBounds = null;
-            if (y <= h) {
-                g.setFont(Theme.font(Font.BOLD, 12.5f));
-                String link = "Ouvrir sur Jamendo";
-                FontMetrics fm = g.getFontMetrics();
-                g.setColor(Mood.mix(glow, Color.WHITE, 0.55));
-                g.drawString(link, tx, y);
-                g.fillRect(tx, y + 3, fm.stringWidth(link), 1);
-                linkBounds = new Rectangle(tx, y - fm.getAscent(), fm.stringWidth(link), fm.getHeight() + 4);
+            y += 34;
+            // boutons d'action (favoris, abonnement, lien Jamendo), avec retour à la ligne si besoin
+            hits.clear();
+            List<String> libelles = new ArrayList<>();
+            List<Boolean> actifs = new ArrayList<>();
+            List<Runnable> actions = new ArrayList<>();
+            Morceau m = track;
+            if (actionsAuditeur != null) {
+                boolean fav = actionsAuditeur.estFavori(m);
+                libelles.add(fav ? "Favori" : "+ Favori");
+                actifs.add(fav);
+                actions.add(() -> actionsAuditeur.basculerFavori(m));
+                boolean artisteFav = actionsAuditeur.estArtisteFavori(m.artiste());
+                libelles.add(artisteFav ? "Artiste favori" : "+ Artiste favori");
+                actifs.add(artisteFav);
+                actions.add(() -> actionsAuditeur.basculerArtisteFavori(m.artiste()));
+                boolean abo = actionsAuditeur.estAbonne(m.artiste());
+                libelles.add(abo ? "Abonné" : "S'abonner");
+                actifs.add(abo);
+                actions.add(() -> actionsAuditeur.basculerAbonnement(m.artiste()));
             }
+            if (m.urlJamendo() != null && !m.urlJamendo().isBlank()) {
+                libelles.add("Jamendo");
+                actifs.add(false);
+                actions.add(() -> Theme.openLink(m.urlJamendo()));
+            }
+            int bx = tx, rowY = y - 18;
+            g.setFont(Theme.font(Font.BOLD, 12));
+            FontMetrics bfm = g.getFontMetrics();
+            for (int i = 0; i < libelles.size(); i++) {
+                int bw = bfm.stringWidth(libelles.get(i)) + 24;
+                if (bx + bw > tx + maxW && bx > tx) {   // plus de place sur la ligne : on passe à la suivante
+                    bx = tx;
+                    rowY += 34;
+                }
+                if (rowY + 28 > h + 10) break;           // plus de place au-dessus de l'égaliseur
+                Rectangle r = new Rectangle(bx, rowY, bw, 28);
+                drawButton(g, libelles.get(i), r, actifs.get(i));
+                hits.add(new Hit(r, actions.get(i)));
+                bx += bw + 8;
+            }
+            y = rowY + 28;
             // statut (chargement, erreurs)
             y += 22;
             if (y <= h + 8) {
@@ -396,6 +465,24 @@ public class ListenPanel extends JPanel implements ListenController.View {
                 g.setColor(Theme.alpha(Color.WHITE, 150));
                 g.fill(new RoundRectangle2D.Double(bx, y + h - peaks[i] * h - 3, bw - 3, 2, 2, 2));
             }
+        }
+
+        private void drawButton(Graphics2D g, String text, Rectangle r, boolean actif) {
+            RoundRectangle2D shape = new RoundRectangle2D.Double(r.x, r.y, r.width, r.height, r.height, r.height);
+            if (actif) {
+                Color bg = Mood.mix(glow, Color.WHITE, 0.25);
+                g.setColor(bg);
+                g.fill(shape);
+                g.setColor(Theme.readableOn(bg));
+            } else {
+                g.setColor(new Color(255, 255, 255, 18));
+                g.fill(shape);
+                g.setColor(new Color(255, 255, 255, 90));
+                g.draw(shape);
+                g.setColor(Theme.TEXT);
+            }
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(text, r.x + 12, r.y + (r.height - fm.getHeight()) / 2 + fm.getAscent());
         }
 
         private int drawChip(Graphics2D g, String text, int x, int y) {

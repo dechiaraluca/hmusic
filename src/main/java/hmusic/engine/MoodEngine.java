@@ -85,6 +85,8 @@ public class MoodEngine {
 
     public void addListener(EngineListener l) { listeners.add(l); }
 
+    public void removeListener(EngineListener l) { listeners.remove(l); }
+
     public void setMood(Mood m) { mood = m; }
 
     public Mood getMood() { return mood; }
