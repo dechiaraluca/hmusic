@@ -10,7 +10,7 @@ import hmusic.model.MusicalProfile;
 import hmusic.model.Sector;
 import hmusic.model.Station;
 import hmusic.stream.ListenController;
-import hmusic.stream.Track;
+import hmusic.catalogue.Morceau;
 import hmusic.ui.ModeSwitch.Mode;
 
 import javax.swing.*;
@@ -477,7 +477,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     // ================================================================== évènements du mode Écouter (thread Swing)
 
     private void refreshListenBar() {
-        Track t = listen.current();
+        Morceau t = listen.current();
         if (t == null) {
             player.setTrack("Mode Écouter", "De vrais morceaux choisis selon ton humeur", mood);
             player.setProgress(0, "0:00", "—");
@@ -489,20 +489,20 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     }
 
     @Override
-    public void showNowPlaying(Track t) {
+    public void showNowPlaying(Morceau t) {
         if (!listening()) return;
-        player.setTrack(t.title(), t.artist() + " · via Jamendo", mood);
-        player.setProgress(0, "0:00", t.durationText());
-        ImageCache.load(t.imageUrl(), img -> {
+        player.setTrack(t.titre(), t.artiste() + " · via Jamendo", mood);
+        player.setProgress(0, "0:00", t.dureeTexte());
+        ImageCache.load(t.urlImage(), img -> {
             if (img != null && listening() && listen.current() == t) player.setCoverImage(img);
         });
     }
 
     @Override
-    public void showProgress(Track t, double seconds) {
+    public void showProgress(Morceau t, double seconds) {
         if (!listening()) return;
-        double f = t.durationSeconds() > 0 ? seconds / t.durationSeconds() : 0;
-        player.setProgress(f, formatTime(seconds), t.durationText());
+        double f = t.dureeSecondes() > 0 ? seconds / t.dureeSecondes() : 0;
+        player.setProgress(f, formatTime(seconds), t.dureeTexte());
     }
 
     @Override

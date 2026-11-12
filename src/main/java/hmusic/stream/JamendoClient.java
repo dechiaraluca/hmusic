@@ -2,6 +2,7 @@ package hmusic.stream;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
+import hmusic.catalogue.Morceau;
 import hmusic.model.Mood;
 
 import java.io.IOException;
@@ -20,11 +21,14 @@ import java.util.Set;
 /**
  * Client minimal de l'API Jamendo v3 (https://developer.jamendo.com/v3.0).
  * Jamendo propose des milliers de morceaux complets sous licence Creative Commons,
- * classés par tags d'ambiance : parfait pour une écoute « selon l'humeur ».
+ * classés par genre et par tags d'ambiance.
  */
 public class JamendoClient {
 
     private static final String API = "https://api.jamendo.com/v3.0/tracks/";
+    /** Paramètres communs : JSON, infos musicales (genres, tags), MP3 de bonne qualité, pochettes 300 px. */
+    private static final String COMMUN = "&format=json&include=musicinfo&audioformat=mp32&imagesize=300"
+            + "&durationbetween=90_480"; // ni jingles ni mix d'une heure
 
     private final String clientId;
     private final HttpClient http;
@@ -40,23 +44,29 @@ public class JamendoClient {
         public JamendoException(String message) { super(message); }
     }
 
-    /**
-     * Cherche des morceaux correspondant à une humeur.
-     *
-     * @param offset décalage dans les résultats (pour obtenir d'autres morceaux)
-     */
-    public List<Track> tracksFor(Mood mood, int offset, int limit) throws IOException, InterruptedException {
-        String url = API + "?client_id=" + enc(clientId)
-                + "&format=json"
-                + "&limit=" + limit
-                + "&offset=" + offset
+    /** Morceaux correspondant à une humeur (tags d'ambiance + tempo). */
+    public List<Morceau> morceauxPourHumeur(Mood mood, int offset, int limit) throws IOException, InterruptedException {
+        return requete("&limit=" + limit + "&offset=" + offset
                 + "&fuzzytags=" + MoodTags.tags(mood.sector())
                 + "&speed=" + MoodTags.speed(mood)
-                + "&durationbetween=90_480"          // ni jingles ni mix d'une heure
-                + "&groupby=artist_id"               // un morceau par artiste : plus de variété
-                + "&include=musicinfo"
-                + "&audioformat=mp32"                // MP3 VBR, bonne qualité
-                + "&imagesize=300";
+                + "&groupby=artist_id", null);   // un morceau par artiste : plus de variété
+    }
+
+    /** Morceaux populaires d'un genre (utilisé pour importer le catalogue). */
+    public List<Morceau> morceauxDuGenre(String genre, int limit) throws IOException, InterruptedException {
+        return requete("&limit=" + limit + "&tags=" + enc(genre) + "&order=popularity_total&groupby=artist_id", genre);
+    }
+
+    /** Derniers morceaux d'un artiste (utilisé pour les abonnements). */
+    public List<Morceau> morceauxDeLArtiste(String artiste, int limit) throws IOException, InterruptedException {
+        return requete("&limit=" + limit + "&artist_name=" + enc(artiste) + "&order=releasedate_desc", null);
+    }
+
+    /**
+     * @param genreForce genre à attribuer aux morceaux (null = premier genre indiqué par Jamendo)
+     */
+    private List<Morceau> requete(String parametres, String genreForce) throws IOException, InterruptedException {
+        String url = API + "?client_id=" + enc(clientId) + COMMUN + parametres;
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(15))
                 .header("Accept", "application/json")
@@ -77,28 +87,32 @@ public class JamendoClient {
             throw new JamendoException("Jamendo : " + msg);
         }
 
-        List<Track> tracks = new ArrayList<>();
-        if (r.results == null) return tracks;
+        List<Morceau> morceaux = new ArrayList<>();
+        if (r.results == null) return morceaux;
         for (Result x : r.results) {
-            if (x.audio == null || x.audio.isBlank() || x.id == null) continue;
+            if (x.audio == null || x.audio.isBlank() || x.id == null || x.name == null || x.artist_name == null) continue;
             Set<String> tags = new LinkedHashSet<>();
+            String genre = genreForce;
             if (x.musicinfo != null && x.musicinfo.tags != null) {
                 if (x.musicinfo.tags.vartags != null) tags.addAll(x.musicinfo.tags.vartags);
-                if (x.musicinfo.tags.genres != null) tags.addAll(x.musicinfo.tags.genres);
+                if (x.musicinfo.tags.genres != null) {
+                    tags.addAll(x.musicinfo.tags.genres);
+                    if (genre == null && !x.musicinfo.tags.genres.isEmpty()) genre = x.musicinfo.tags.genres.get(0);
+                }
             }
             String image = x.image != null && !x.image.isBlank() ? x.image : x.album_image;
-            tracks.add(new Track(x.id, nz(x.name), nz(x.artist_name), nz(x.album_name), x.duration,
-                    x.audio, image, x.shareurl, x.license_ccurl, List.copyOf(tags)));
+            try {
+                morceaux.add(new Morceau("jamendo-" + x.id, x.name, x.artist_name, genre, x.album_name, x.duration,
+                        x.audio, image, x.shareurl, List.copyOf(tags)));
+            } catch (IllegalArgumentException ignored) {
+                // morceau incomplet (titre ou artiste vide) : on l'ignore
+            }
         }
-        return tracks;
+        return morceaux;
     }
 
     private static String enc(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
-    }
-
-    private static String nz(String s) {
-        return s == null ? "" : s;
     }
 
     // --- structure du JSON renvoyé (remplie automatiquement par Gson) ---
@@ -124,7 +138,6 @@ public class JamendoClient {
         String album_image;
         String audio;
         String shareurl;
-        String license_ccurl;
         MusicInfo musicinfo;
     }
 

@@ -1,5 +1,6 @@
 package hmusic.stream;
 
+import hmusic.catalogue.Morceau;
 import javazoom.jl.decoder.Bitstream;
 import javazoom.jl.decoder.Decoder;
 import javazoom.jl.decoder.Header;
@@ -30,15 +31,15 @@ public class StreamPlayer {
 
     /** Évènements du lecteur. ATTENTION : appelés depuis le thread de lecture. */
     public interface Listener {
-        void onStarted(Track track);
+        void onStarted(Morceau track);
 
-        void onProgress(Track track, double seconds);
+        void onProgress(Morceau track, double seconds);
 
         void onSpectrum(float[] bands);
 
-        void onFinished(Track track);
+        void onFinished(Morceau track);
 
-        void onError(Track track, String message);
+        void onError(Morceau track, String message);
     }
 
     public static final int BANDS = 48;
@@ -53,7 +54,7 @@ public class StreamPlayer {
         this.listener = listener;
     }
 
-    public synchronized void play(Track track) {
+    public synchronized void play(Morceau track) {
         stop();
         Session s = new Session(track);
         current = s;
@@ -96,14 +97,14 @@ public class StreamPlayer {
     // =====================================================================
 
     private final class Session implements Runnable {
-        private final Track track;
+        private final Morceau track;
         private volatile boolean stopped;
         private volatile boolean paused;
         private volatile double seekTo = -1;
         private volatile InputStream in;
         private volatile SourceDataLine line;
 
-        Session(Track track) {
+        Session(Morceau track) {
             this.track = track;
         }
 
@@ -250,7 +251,7 @@ public class StreamPlayer {
         }
 
         private Bitstream open() throws IOException, InterruptedException {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(track.audioUrl()))
+            HttpRequest req = HttpRequest.newBuilder(URI.create(track.urlAudio()))
                     .timeout(Duration.ofSeconds(20)).GET().build();
             HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
             if (resp.statusCode() >= 400) {

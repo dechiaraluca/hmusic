@@ -1,5 +1,6 @@
 package hmusic.stream;
 
+import hmusic.catalogue.Morceau;
 import hmusic.config.Settings;
 import hmusic.model.Mood;
 import hmusic.model.Sector;
@@ -31,11 +32,11 @@ public class ListenController implements StreamPlayer.Listener {
 
         default void showStatus(String message, boolean error) {}
 
-        default void showNowPlaying(Track track) {}
+        default void showNowPlaying(Morceau track) {}
 
-        default void showQueue(List<Track> upcoming) {}
+        default void showQueue(List<Morceau> upcoming) {}
 
-        default void showProgress(Track track, double seconds) {}
+        default void showProgress(Morceau track, double seconds) {}
 
         default void showSpectrum(float[] bands) {}
 
@@ -57,7 +58,7 @@ public class ListenController implements StreamPlayer.Listener {
         return t;
     });
     private final List<View> views = new ArrayList<>();
-    private final Deque<Track> queue = new ArrayDeque<>();
+    private final Deque<Morceau> queue = new ArrayDeque<>();
     private final Set<String> played = new HashSet<>();
     private final Random rnd = new Random();
     private final Timer debounce;
@@ -70,8 +71,10 @@ public class ListenController implements StreamPlayer.Listener {
     private boolean fetching;
     private boolean playRequested;    // l'utilisateur veut entendre quelque chose
     private boolean active;           // le mode Écouter est-il affiché ?
-    private Track current;
+    private Morceau current;
     private int consecutiveErrors;
+    /** Nom de la playlist en cours (playlist IA, artiste…), ou null en mode « radio d'humeur ». */
+    private String playlist;
 
     public ListenController(Settings settings) {
         this.settings = settings;
@@ -87,6 +90,19 @@ public class ListenController implements StreamPlayer.Listener {
         views.add(v);
     }
 
+    public void removeView(View v) {
+        views.remove(v);
+    }
+
+    /** Le client Jamendo, s'il est configuré (utilisé par l'Admin pour importer le catalogue). */
+    public Optional<JamendoClient> jamendo() {
+        return Optional.ofNullable(client);
+    }
+
+    public boolean inPlaylist() {
+        return playlist != null;
+    }
+
     public boolean hasKey() {
         return client != null;
     }
@@ -95,11 +111,11 @@ public class ListenController implements StreamPlayer.Listener {
         return playRequested && current != null && !player.isPaused();
     }
 
-    public Track current() {
+    public Morceau current() {
         return current;
     }
 
-    public List<Track> upcoming() {
+    public List<Morceau> upcoming() {
         return List.copyOf(queue);
     }
 
@@ -129,7 +145,8 @@ public class ListenController implements StreamPlayer.Listener {
     public void setMood(Mood m, boolean immediate) {
         mood = m;
         if (!active || client == null) return;
-        if (m.sector() == queueSector) return;
+        if (playlist != null && !immediate) return; // une playlist est en cours : on ne la remplace pas
+        if (m.sector() == queueSector && playlist == null) return;
         if (immediate && playRequested) {
             debounce.stop();
             playFresh(m);
@@ -141,9 +158,54 @@ public class ListenController implements StreamPlayer.Listener {
     /** Vide la file, cherche des morceaux pour cette humeur et lance le premier. */
     public void playFresh(Mood m) {
         mood = m;
+        playlist = null;
         playRequested = true;
         if (!ensureKey()) return;
         refill(true);
+    }
+
+    /**
+     * Joue une liste de morceaux précise (playlist proposée par le Recommandeur, favoris…).
+     * Tant qu'elle n'est pas finie, les changements progressifs d'humeur ne la remplacent pas.
+     * À la fin, on revient à la « radio d'humeur ».
+     */
+    public void playPlaylist(List<Morceau> morceaux, String nom) {
+        List<Morceau> jouables = new ArrayList<>();
+        for (Morceau m : morceaux) if (m.estJouable()) jouables.add(m);
+        if (jouables.isEmpty()) {
+            views.forEach(v -> v.showStatus("Aucun morceau écoutable dans « " + nom + " ».", true));
+            return;
+        }
+        debounce.stop();
+        generation++;            // annule une éventuelle recherche Jamendo en cours
+        fetching = false;
+        playlist = nom;
+        queue.clear();
+        queue.addAll(jouables);
+        playRequested = true;
+        playNext();
+    }
+
+    /** Cherche les derniers morceaux d'un artiste sur Jamendo et les joue. */
+    public void playArtist(String artiste) {
+        if (!ensureKey()) return;
+        final JamendoClient c = client;
+        final int gen = ++generation;
+        views.forEach(v -> v.showStatus("Je cherche les morceaux de " + artiste + "…", false));
+        io.submit(() -> {
+            try {
+                List<Morceau> found = c.morceauxDeLArtiste(artiste, 20);
+                SwingUtilities.invokeLater(() -> {
+                    if (gen != generation) return;
+                    if (found.isEmpty()) views.forEach(v -> v.showStatus("Aucun morceau trouvé pour " + artiste + ".", true));
+                    else playPlaylist(found, "Artiste : " + artiste);
+                });
+            } catch (IOException e) {
+                SwingUtilities.invokeLater(() -> views.forEach(v -> v.showStatus("Impossible de joindre Jamendo : " + e.getMessage(), true)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     /**
@@ -161,7 +223,7 @@ public class ListenController implements StreamPlayer.Listener {
         if (!ensureKey()) return;
         boolean stale = mood.sector() != queueSector;
         if (autoplay) {
-            if (current != null && !stale) resume(); else playFresh(mood);
+            if (current != null && (!stale || playlist != null)) resume(); else playFresh(mood);
         } else if (stale || queue.isEmpty()) {
             refill(false); // on prépare la file sans lancer la lecture
         }
@@ -205,7 +267,7 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     /** Joue un morceau précis de la file d'attente. */
-    public void play(Track t) {
+    public void play(Morceau t) {
         queue.remove(t);
         playRequested = true;
         start(t);
@@ -213,8 +275,8 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     public void seekFraction(double f) {
-        if (current == null || current.durationSeconds() <= 0) return;
-        player.seek(f * current.durationSeconds());
+        if (current == null || current.dureeSecondes() <= 0) return;
+        player.seek(f * current.dureeSecondes());
     }
 
     public void setVolume(float v) {
@@ -235,22 +297,28 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     private void playNext() {
-        Track t = queue.poll();
+        Morceau t = queue.poll();
         if (t == null) {
+            if (playlist != null) {   // fin de la playlist : retour à la radio d'humeur
+                String fini = playlist;
+                playlist = null;
+                views.forEach(v -> v.showStatus("Fin de « " + fini + " », retour à la radio d'humeur.", false));
+                queueSector = null;
+            }
             if (!fetching) refill(true);
             return;
         }
         start(t);
         publishQueue();
-        if (queue.size() < LOW_WATER) fetchMore();
+        if (queue.size() < LOW_WATER && playlist == null) fetchMore();
     }
 
-    private void start(Track t) {
+    private void start(Morceau t) {
         current = t;
         played.add(t.id());
         player.play(t);
         views.forEach(v -> v.showNowPlaying(t));
-        views.forEach(v -> v.showStatus("Chargement de « " + t.title() + " »…", false));
+        views.forEach(v -> v.showStatus("Chargement de « " + t.titre() + " »…", false));
         notifyPlaying();
     }
 
@@ -282,11 +350,11 @@ public class ListenController implements StreamPlayer.Listener {
         fetching = true;
         views.forEach(v -> v.showStatus("Je cherche des morceaux « " + m.sector().label().toLowerCase(Locale.FRANCE) + " »…", false));
         io.submit(() -> {
-            List<Track> found;
+            List<Morceau> found;
             String error = null;
             try {
-                found = c.tracksFor(m, offset, PAGE);
-                if (found.isEmpty() && offset > 0) found = c.tracksFor(m, 0, PAGE); // plus de résultats : on repart du début
+                found = c.morceauxPourHumeur(m, offset, PAGE);
+                if (found.isEmpty() && offset > 0) found = c.morceauxPourHumeur(m, 0, PAGE); // plus de résultats : on repart du début
             } catch (IOException e) {
                 found = List.of();
                 error = e.getMessage();
@@ -294,13 +362,13 @@ public class ListenController implements StreamPlayer.Listener {
                 Thread.currentThread().interrupt();
                 return;
             }
-            final List<Track> result = found;
+            final List<Morceau> result = found;
             final String err = error;
             SwingUtilities.invokeLater(() -> onFetched(gen, result, err, replace, startNow));
         });
     }
 
-    private void onFetched(int gen, List<Track> found, String error, boolean replace, boolean startNow) {
+    private void onFetched(int gen, List<Morceau> found, String error, boolean replace, boolean startNow) {
         if (gen != generation) return;   // une recherche plus récente a été lancée entre-temps
         fetching = false;
         if (error != null) {
@@ -313,8 +381,8 @@ public class ListenController implements StreamPlayer.Listener {
             }
             return;
         }
-        List<Track> fresh = new ArrayList<>();
-        for (Track t : found) if (!played.contains(t.id())) fresh.add(t);
+        List<Morceau> fresh = new ArrayList<>();
+        for (Morceau t : found) if (!played.contains(t.id())) fresh.add(t);
         if (fresh.isEmpty()) fresh.addAll(found); // tout a déjà été écouté : tant pis, on réécoute
         Collections.shuffle(fresh, rnd);
 
@@ -331,7 +399,7 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     private void publishQueue() {
-        List<Track> up = List.copyOf(queue);
+        List<Morceau> up = List.copyOf(queue);
         views.forEach(v -> v.showQueue(up));
     }
 
@@ -343,7 +411,7 @@ public class ListenController implements StreamPlayer.Listener {
     // ================================================================== évènements du lecteur (thread audio)
 
     @Override
-    public void onStarted(Track track) {
+    public void onStarted(Morceau track) {
         SwingUtilities.invokeLater(() -> {
             if (track != current) return;
             consecutiveErrors = 0;
@@ -353,7 +421,7 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     @Override
-    public void onProgress(Track track, double seconds) {
+    public void onProgress(Morceau track, double seconds) {
         SwingUtilities.invokeLater(() -> {
             if (track == current) views.forEach(v -> v.showProgress(track, seconds));
         });
@@ -365,14 +433,14 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     @Override
-    public void onFinished(Track track) {
+    public void onFinished(Morceau track) {
         SwingUtilities.invokeLater(() -> {
             if (track == current && playRequested) playNext();
         });
     }
 
     @Override
-    public void onError(Track track, String message) {
+    public void onError(Morceau track, String message) {
         SwingUtilities.invokeLater(() -> {
             if (track != current) return;
             consecutiveErrors++;
@@ -382,7 +450,7 @@ public class ListenController implements StreamPlayer.Listener {
                 views.forEach(v -> v.showStatus("Lecture impossible (" + message + "). Vérifie ta connexion.", true));
                 return;
             }
-            views.forEach(v -> v.showStatus("« " + track.title() + " » illisible (" + message + "), morceau suivant…", true));
+            views.forEach(v -> v.showStatus("« " + track.titre() + " » illisible (" + message + "), morceau suivant…", true));
             playNext();
         });
     }

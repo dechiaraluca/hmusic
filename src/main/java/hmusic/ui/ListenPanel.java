@@ -3,7 +3,7 @@ package hmusic.ui;
 import hmusic.model.Mood;
 import hmusic.stream.ListenController;
 import hmusic.stream.StreamPlayer;
-import hmusic.stream.Track;
+import hmusic.catalogue.Morceau;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -123,12 +123,12 @@ public class ListenPanel extends JPanel implements ListenController.View {
         nowPlaying.setStatus(message, error);
     }
 
-    @Override public void showNowPlaying(Track track) {
+    @Override public void showNowPlaying(Morceau track) {
         cards.show(this, "player");
         nowPlaying.setTrack(track);
     }
 
-    @Override public void showQueue(List<Track> upcoming) {
+    @Override public void showQueue(List<Morceau> upcoming) {
         queueList.setTracks(upcoming);
     }
 
@@ -162,7 +162,7 @@ public class ListenPanel extends JPanel implements ListenController.View {
 
     /** Le morceau en cours : pochette, infos, tags, égaliseur réactif. */
     private static final class NowPlaying extends JComponent {
-        private Track track;
+        private Morceau track;
         private BufferedImage image;
         private Color artColor;
         private Color moodColor = Mood.NEUTRAL.color();
@@ -180,8 +180,8 @@ public class ListenPanel extends JPanel implements ListenController.View {
             new Timer(16, e -> animate()).start();
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
-                    if (linkBounds != null && linkBounds.contains(e.getPoint()) && track != null && track.shareUrl() != null) {
-                        Theme.openLink(track.shareUrl());
+                    if (linkBounds != null && linkBounds.contains(e.getPoint()) && track != null && track.urlJamendo() != null) {
+                        Theme.openLink(track.urlJamendo());
                     }
                 }
             });
@@ -197,11 +197,11 @@ public class ListenPanel extends JPanel implements ListenController.View {
             moodColor = m.color();
         }
 
-        void setTrack(Track t) {
+        void setTrack(Morceau t) {
             track = t;
             image = null;
             artColor = null;
-            ImageCache.load(t.imageUrl(), img -> {
+            ImageCache.load(t.urlImage(), img -> {
                 if (track != t) return;
                 image = img;
                 artColor = img == null ? null : averageColor(img);
@@ -342,16 +342,16 @@ public class ListenPanel extends JPanel implements ListenController.View {
             int y = top + 30;
             g.setFont(Theme.font(Font.BOLD, 28));
             g.setColor(Theme.TEXT);
-            g.drawString(Theme.fit(g.getFontMetrics(), track.title(), maxW), tx, y);
+            g.drawString(Theme.fit(g.getFontMetrics(), track.titre(), maxW), tx, y);
             y += 28;
             g.setFont(Theme.font(Font.PLAIN, 16));
             g.setColor(new Color(0xD7DAE0));
-            g.drawString(Theme.fit(g.getFontMetrics(), track.artist(), maxW), tx, y);
+            g.drawString(Theme.fit(g.getFontMetrics(), track.artiste(), maxW), tx, y);
             if (!track.album().isBlank()) {
                 y += 21;
                 g.setFont(Theme.font(Font.PLAIN, 13));
                 g.setColor(Theme.MUTED);
-                g.drawString(Theme.fit(g.getFontMetrics(), "Album : " + track.album() + "  ·  " + track.durationText(), maxW), tx, y);
+                g.drawString(Theme.fit(g.getFontMetrics(), "Album : " + track.album() + "  ·  " + track.dureeTexte(), maxW), tx, y);
             }
             // tags
             y += 16;
@@ -413,12 +413,12 @@ public class ListenPanel extends JPanel implements ListenController.View {
     /** « À suivre » : les prochains morceaux, cliquables. */
     private static final class QueueList extends JComponent {
         private static final int ROWS = 2, ROW_H = 50, HEADER = 30;
-        private final java.util.function.Consumer<Track> onPick;
-        private List<Track> tracks = new ArrayList<>();
+        private final java.util.function.Consumer<Morceau> onPick;
+        private List<Morceau> tracks = new ArrayList<>();
         private final Map<String, BufferedImage> thumbs = new HashMap<>();
         private int hover = -1;
 
-        QueueList(java.util.function.Consumer<Track> onPick) {
+        QueueList(java.util.function.Consumer<Morceau> onPick) {
             this.onPick = onPick;
             setOpaque(false);
             setPreferredSize(new Dimension(100, HEADER + ROWS * ROW_H + 8));
@@ -451,12 +451,12 @@ public class ListenPanel extends JPanel implements ListenController.View {
             return y >= HEADER && r < Math.min(ROWS, tracks.size()) ? r : -1;
         }
 
-        void setTracks(List<Track> list) {
+        void setTracks(List<Morceau> list) {
             tracks = list;
             for (int i = 0; i < Math.min(ROWS, list.size()); i++) {
-                Track t = list.get(i);
+                Morceau t = list.get(i);
                 if (!thumbs.containsKey(t.id())) {
-                    ImageCache.load(t.imageUrl(), img -> {
+                    ImageCache.load(t.urlImage(), img -> {
                         if (img != null) {
                             thumbs.put(t.id(), img);
                             repaint();
@@ -485,7 +485,7 @@ public class ListenPanel extends JPanel implements ListenController.View {
                 g.drawString("La file d'attente se remplit selon ton humeur.", 18, HEADER + 26);
             }
             for (int i = 0; i < Math.min(ROWS, tracks.size()); i++) {
-                Track t = tracks.get(i);
+                Morceau t = tracks.get(i);
                 int y = HEADER + i * ROW_H;
                 if (i == hover) {
                     g.setColor(Theme.CARD_HI);
@@ -507,11 +507,11 @@ public class ListenPanel extends JPanel implements ListenController.View {
                 int tx = 16 + s + 12;
                 g.setFont(Theme.font(Font.BOLD, 13));
                 g.setColor(Theme.TEXT);
-                g.drawString(Theme.fit(g.getFontMetrics(), t.title(), w - tx - 70), tx, y + 20);
+                g.drawString(Theme.fit(g.getFontMetrics(), t.titre(), w - tx - 70), tx, y + 20);
                 g.setFont(Theme.font(Font.PLAIN, 12));
                 g.setColor(Theme.MUTED);
-                g.drawString(Theme.fit(g.getFontMetrics(), t.artist(), w - tx - 70), tx, y + 37);
-                String d = t.durationText();
+                g.drawString(Theme.fit(g.getFontMetrics(), t.artiste(), w - tx - 70), tx, y + 37);
+                String d = t.dureeTexte();
                 g.drawString(d, w - 22 - g.getFontMetrics().stringWidth(d), y + 28);
             }
             g.dispose();
