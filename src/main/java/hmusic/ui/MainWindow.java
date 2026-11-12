@@ -4,7 +4,9 @@ import hmusic.analysis.MoodAnalyzer;
 import hmusic.catalogue.Catalogue;
 import hmusic.data.MoodJournal;
 import hmusic.data.Stockage;
+import hmusic.reco.MockRecommandeur;
 import hmusic.reco.Playlist;
+import hmusic.reco.RecommandationException;
 import hmusic.reco.Recommandeur;
 import hmusic.stream.ImportJamendo;
 import hmusic.stream.JamendoClient;
@@ -169,6 +171,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             case AJOUTER_MORCEAU -> AdminDialogs.ajouterMorceau(this, catalogue, catalogue::sauvegarder);
             case GERER_CATALOGUE -> AdminDialogs.gererCatalogue(this, catalogue, catalogue::sauvegarder);
             case IMPORTER_CATALOGUE -> importerCatalogue();
+            case LISTER_UTILISATEURS -> AdminDialogs.listerUtilisateurs(this, comptes.utilisateurs());
             case JOURNAL -> openJournal();
             case DECONNEXION -> deconnecter();
         }
@@ -520,29 +523,40 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             }
 
             @Override protected void done() {
-                Playlist p;
                 try {
-                    p = get();
+                    jouerPlaylist(get(), humeur, "");
                 } catch (Exception e) {
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    feedback.setText("Pas de playlist : " + cause.getMessage());
-                    return;
+                    if (recommandeur instanceof MockRecommandeur) {
+                        feedback.setText("Pas de playlist : " + cause.getMessage());
+                        return;
+                    }
+                    // solution de secours : l'IA a échoué, le recommandeur hors ligne prend le relais
+                    try {
+                        jouerPlaylist(new MockRecommandeur().recommander(humeur, copie, TAILLE_PLAYLIST), humeur,
+                                cause.getMessage() + " → ");
+                    } catch (RecommandationException e2) {
+                        feedback.setText("Pas de playlist : " + e2.getMessage());
+                    }
                 }
-                if (p.morceaux().isEmpty()) {
-                    feedback.setText("Le " + p.source() + " n'a proposé aucun morceau du catalogue.");
-                    return;
-                }
-                listen.playPlaylist(p.morceaux(), "Playlist « " + humeur + " »");
-                analyzer.analyze(humeur).ifPresent(a -> applyMood(a.mood(), false)); // pour colorer l'interface
-                logMood(mood, "playlist « " + humeur + " »");
-                String msg = "Playlist proposée par le " + p.source() + " : " + p.morceaux().size() + " morceau(x).";
-                if (!p.rejetes().isEmpty()) {
-                    msg += "  " + p.rejetes().size() + " proposition(s) rejetée(s) car absente(s) du catalogue : "
-                            + String.join(" ; ", p.rejetes());
-                }
-                feedback.setText(msg);
             }
         }.execute();
+    }
+
+    private void jouerPlaylist(Playlist p, String humeur, String prefixe) {
+        if (p.morceaux().isEmpty()) {
+            feedback.setText(prefixe + "Le " + p.source() + " n'a proposé aucun morceau du catalogue.");
+            return;
+        }
+        listen.playPlaylist(p.morceaux(), "Playlist « " + humeur + " »");
+        analyzer.analyze(humeur).ifPresent(a -> applyMood(a.mood(), false)); // pour colorer l'interface
+        logMood(mood, "playlist « " + humeur + " »");
+        String msg = prefixe + "Playlist proposée par le " + p.source() + " : " + p.morceaux().size() + " morceau(x).";
+        if (!p.rejetes().isEmpty()) {
+            msg += "  " + p.rejetes().size() + " proposition(s) rejetée(s) car absente(s) du catalogue : "
+                    + String.join(" ; ", p.rejetes());
+        }
+        feedback.setText(msg);
     }
 
     // ================================================================== voyages guidés

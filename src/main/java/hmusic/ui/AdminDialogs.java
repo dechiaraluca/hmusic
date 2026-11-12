@@ -2,11 +2,16 @@ package hmusic.ui;
 
 import hmusic.catalogue.Catalogue;
 import hmusic.catalogue.Morceau;
+import hmusic.utilisateur.Admin;
+import hmusic.utilisateur.Auditeur;
+import hmusic.utilisateur.Utilisateur;
 
 import javax.swing.*;
 import java.awt.*;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /** Fenêtres de l'administrateur : ajouter un morceau, gérer (consulter / supprimer) le catalogue. */
 public final class AdminDialogs {
@@ -73,6 +78,26 @@ public final class AdminDialogs {
         d[0] = Dialogues.fenetre(owner, "Ajouter un morceau", "Le morceau rejoindra le catalogue utilisé pour les playlists.",
                 form, new PillButton("Annuler", false, () -> d[0].dispose()), ajouter);
         d[0].setSize(500, 470);
+        d[0].setLocationRelativeTo(owner);
+        d[0].setVisible(true);
+    }
+
+    /** Liste des comptes inscrits (identifiant, rôle, date d'inscription, activité). */
+    public static void listerUtilisateurs(Window owner, List<Utilisateur> comptes) {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("d MMM yyyy 'à' HH:mm", Locale.FRANCE);
+        Dialogues.Liste<Utilisateur> liste = new Dialogues.Liste<>(
+                u -> u.identifiant() + "  ·  " + u.role(),
+                u -> "Inscrit le " + fmt.format(u.inscription())
+                        + (u instanceof Auditeur a ? "  ·  " + a.morceauxFavoris().size() + " favori(s), "
+                        + a.abonnements().size() + " abonnement(s)" : ""),
+                u -> u instanceof Admin ? new Color(0xFF7A59) : new Color(0x2EC4B6));
+        liste.setElements(comptes);
+        long admins = comptes.stream().filter(u -> u instanceof Admin).count();
+        JDialog[] d = new JDialog[1];
+        d[0] = Dialogues.fenetre(owner, "Utilisateurs inscrits",
+                comptes.size() + " compte(s) : " + admins + " admin(s), " + (comptes.size() - admins) + " auditeur(s)",
+                Dialogues.defilement(liste), new PillButton("Fermer", true, () -> d[0].dispose()));
+        d[0].setSize(520, 480);
         d[0].setLocationRelativeTo(owner);
         d[0].setVisible(true);
     }

@@ -12,6 +12,7 @@ public enum OptionMenu {
     AJOUTER_MORCEAU("Ajouter un morceau"),
     GERER_CATALOGUE("Gérer le catalogue"),
     IMPORTER_CATALOGUE("Importer depuis Jamendo"),
+    LISTER_UTILISATEURS("Utilisateurs inscrits"),
     // Communes à tous
     JOURNAL("Mon journal d'humeur"),
     DECONNEXION("Se déconnecter");

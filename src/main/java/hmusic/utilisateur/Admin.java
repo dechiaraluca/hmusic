@@ -20,6 +20,7 @@ public class Admin extends Utilisateur {
 
     @Override
     protected List<OptionMenu> optionsSpecifiques() {
-        return List.of(OptionMenu.AJOUTER_MORCEAU, OptionMenu.GERER_CATALOGUE, OptionMenu.IMPORTER_CATALOGUE);
+        return List.of(OptionMenu.AJOUTER_MORCEAU, OptionMenu.GERER_CATALOGUE, OptionMenu.IMPORTER_CATALOGUE,
+                OptionMenu.LISTER_UTILISATEURS);
     }
 }

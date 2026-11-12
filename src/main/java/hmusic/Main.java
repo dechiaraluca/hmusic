@@ -3,6 +3,8 @@ package hmusic;
 import hmusic.catalogue.Catalogue;
 import hmusic.config.Settings;
 import hmusic.engine.MoodEngine;
+import hmusic.ia.HttpAiClient;
+import hmusic.reco.IaRecommandeur;
 import hmusic.reco.MockRecommandeur;
 import hmusic.reco.Recommandeur;
 import hmusic.stream.ListenController;
@@ -41,9 +43,18 @@ public final class Main {
         });
     }
 
-    /** Choix de l'implémentation de Recommandeur : le reste du programme ne voit que l'interface. */
+    /**
+     * Choix de l'implémentation de Recommandeur : le reste du programme ne voit que l'interface.
+     * La clé de l'IA est lue dans la variable d'environnement AI_API_KEY (comme au Projet 3) :
+     * elle n'est jamais écrite dans le code ni dans un fichier du projet.
+     */
     private static Recommandeur choisirRecommandeur() {
-        return new MockRecommandeur(); // TODO : IaRecommandeur dès que l'AiClient du Projet 3 est intégré
+        String cle = System.getenv("AI_API_KEY");
+        if (cle == null || cle.isBlank()) {
+            System.out.println("Variable AI_API_KEY absente : playlists proposées par le MockRecommandeur (hors ligne).");
+            return new MockRecommandeur();
+        }
+        return new IaRecommandeur(new HttpAiClient(cle.trim(), IaRecommandeur.MESSAGE_SYSTEME));
     }
 
     /** Connexion, puis fenêtre principale. À la déconnexion, on recommence. */

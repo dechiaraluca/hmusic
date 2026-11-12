@@ -37,6 +37,61 @@ Le dossier `soundfonts/` contient **GeneralUser GS** (S. Christian Collins), une
 General MIDI gratuite, bien plus réaliste que celle intégrée à Java. Elle est chargée automatiquement.
 Sa licence est dans `soundfonts/GeneralUser-GS-LICENSE.txt`.
 
+### Premier lancement
+
+1. Crée un compte : **le tout premier compte est administrateur** (aucun mot de passe admin n'est écrit
+   dans le code). Les comptes suivants sont des auditeurs.
+2. Avec le compte admin, ouvre le menu (en bas à gauche) puis **Importer depuis Jamendo** pour remplir le
+   catalogue (environ 20 morceaux pour chacun de 14 genres). Il faut avoir configuré le Client ID Jamendo.
+3. Crée un compte auditeur, passe en mode **Écouter**, écris ton humeur : le Recommandeur propose une
+   playlist tirée du catalogue.
+
+Tests : `mvnw.cmd test`.
+
+### Activer la playlist IA
+
+L'`IaRecommandeur` réutilise le client du Projet 3 (API Groq). La clé est lue dans la variable
+d'environnement **`AI_API_KEY`** : elle n'est jamais écrite dans le code ni dans un fichier du projet.
+
+```bat
+setx AI_API_KEY "ta-clé-groq"
+```
+
+Ferme puis rouvre le terminal (ou VS Code) avant de relancer `run.bat`. Sans cette variable, hmusic utilise
+le `MockRecommandeur` (hors ligne). Si l'IA échoue (réseau, quota), hmusic l'indique et bascule
+automatiquement sur le `MockRecommandeur` pour cette playlist. La variable facultative `AI_MODEL` permet de
+changer de modèle, comme au Projet 3.
+
+## Comptes, catalogue et playlist
+
+| Élément | Où | Rôle |
+|---|---|---|
+| `Utilisateur` (abstraite) | `utilisateur/` | identifiant, mot de passe haché, menu commun |
+| `Auditeur`, `Admin` | `utilisateur/` | sous-classes : chacune fournit ses propres options de menu |
+| `GestionUtilisateurs` | `utilisateur/` | inscription, connexion, sauvegarde par sérialisation |
+| `MotDePasse` | `utilisateur/` | SHA-256 + sel aléatoire |
+| `Morceau`, `Catalogue` | `catalogue/` | catalogue rangé dans une `Map<genre, List<Morceau>>` (+ index par identifiant) |
+| `ImportJamendo` | `stream/` | remplit le catalogue depuis la bibliothèque Jamendo |
+| `Recommandeur` (interface) | `reco/` | `MockRecommandeur` (sans réseau) et `IaRecommandeur` (IA) |
+| `PlaylistIa` | `reco/` | prompt envoyé à l'IA + **contrôle de sa réponse** |
+| `AiClient`, `HttpAiClient`, `AiException` | `ia/` | repris du Projet 3 (ajouts signalés en commentaire) |
+
+- **Auditeur** : favoris (morceaux et artistes) et abonnements, depuis les boutons sous le morceau en cours
+  (mode Écouter), puis dans *Mes favoris* et *Mes abonnements* (menu).
+- **Admin** : ajouter un morceau à la main, gérer le catalogue (filtrer par genre, rechercher, supprimer),
+  importer depuis Jamendo, **lister les utilisateurs inscrits** (le « défi »).
+- Les données sont dans `~/.hmusic/` : `utilisateurs.ser`, `catalogue.ser`, `journal-<identifiant>.csv`.
+
+### Points de contrôle : où regarder dans le code
+
+| Question | Réponse dans… |
+|---|---|
+| Pourquoi `Utilisateur` est abstraite ? Et `new Utilisateur()` ? | commentaire de `utilisateur/Utilisateur.java` |
+| Pourquoi `Recommandeur` est une interface ? | commentaire de `reco/Recommandeur.java` |
+| Morceau proposé par l'IA qui n'existe pas ? | `reco/PlaylistIa.controler(...)`, testé dans `RecommandeurTest` |
+| Pourquoi une `Map` pour le catalogue ? | commentaire de `catalogue/Catalogue.java` |
+| Menu différent selon l'utilisateur (polymorphisme) ? | `Utilisateur.menu()` + `optionsSpecifiques()` dans `Auditeur` / `Admin` |
+
 ## Fonctionnalités
 
 | Fonction | Description |

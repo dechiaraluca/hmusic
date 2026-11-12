@@ -7,6 +7,7 @@ import java.io.Serial;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -75,6 +76,11 @@ public class GestionUtilisateurs implements Serializable {
             throw new CompteException("Identifiant ou mot de passe incorrect.");
         }
         return u;
+    }
+
+    /** Tous les comptes, dans l'ordre d'inscription (copie : la Map interne reste protégée). */
+    public List<Utilisateur> utilisateurs() {
+        return List.copyOf(comptes.values());
     }
 
     /** À appeler après chaque modification d'un compte (favoris, abonnements…). */

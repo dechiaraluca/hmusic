@@ -71,6 +71,18 @@ class GestionUtilisateursTest {
     }
 
     @Test
+    void lAdminPeutListerLesUtilisateursInscrits() throws Exception {
+        GestionUtilisateurs g = nouvelle();
+        Utilisateur admin = g.inscrire("prof", "secret123", "secret123");
+        g.inscrire("lea", "motdepasse", "motdepasse");
+        g.inscrire("tom", "motdepasse", "motdepasse");
+        assertTrue(admin.menu().contains(OptionMenu.LISTER_UTILISATEURS));
+        assertEquals(java.util.List.of("prof", "lea", "tom"),
+                g.utilisateurs().stream().map(Utilisateur::identifiant).toList()); // ordre d'inscription
+        assertThrows(UnsupportedOperationException.class, () -> g.utilisateurs().clear()); // copie non modifiable
+    }
+
+    @Test
     void lesComptesEtLesFavorisSontSauvegardes() throws Exception {
         GestionUtilisateurs g = nouvelle();
         g.inscrire("prof", "secret123", "secret123");
