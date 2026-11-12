@@ -1,7 +1,11 @@
 package hmusic.catalogue;
 
+import hmusic.data.Stockage;
+
+import java.io.IOException;
 import java.io.Serial;
 import java.io.Serializable;
+import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.*;
 
@@ -22,8 +26,27 @@ public class Catalogue implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
+    public static final Path FICHIER = Stockage.DOSSIER.resolve("catalogue.ser");
+
     private final Map<String, List<Morceau>> parGenre = new TreeMap<>(); // TreeMap : genres triés par ordre alphabétique
     private final Map<String, Morceau> parId = new HashMap<>();
+    private transient Path fichier; // transient : le chemin n'est pas sauvegardé avec le catalogue
+
+    /** Charge le catalogue sauvegardé (ou un catalogue vide au premier lancement). */
+    public static Catalogue charger(Path fichier) {
+        Catalogue c = Stockage.charger(fichier, Catalogue::new);
+        c.fichier = fichier;
+        return c;
+    }
+
+    public void sauvegarder() {
+        if (fichier == null) return;
+        try {
+            Stockage.sauvegarder(fichier, this);
+        } catch (IOException e) {
+            System.err.println("Impossible d'enregistrer le catalogue : " + e.getMessage());
+        }
+    }
 
     /** @return false si un morceau avec le même identifiant existe déjà */
     public boolean ajouter(Morceau m) {
