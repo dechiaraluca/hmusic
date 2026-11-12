@@ -2,6 +2,8 @@ package hmusic.ui;
 
 import hmusic.model.Journey;
 import hmusic.model.Station;
+import hmusic.utilisateur.OptionMenu;
+import hmusic.utilisateur.Utilisateur;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -15,7 +17,8 @@ public class Sidebar extends JPanel {
 
     private final List<SidebarItem> items = new ArrayList<>();
 
-    public Sidebar(Consumer<Station> onStation, Consumer<Journey> onJourney, Runnable onJournal) {
+    public Sidebar(Utilisateur utilisateur, Consumer<Station> onStation, Consumer<Journey> onJourney,
+                   Consumer<OptionMenu> onOption) {
         super(new BorderLayout());
         setBackground(Theme.SIDEBAR);
         setPreferredSize(new Dimension(272, 0));
@@ -63,11 +66,35 @@ public class Sidebar extends JPanel {
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.setOpaque(false);
         bottom.setBorder(new EmptyBorder(8, 14, 14, 14));
-        SidebarItem journal = new SidebarItem("Mon journal d'humeur", "Ton humeur au fil des jours",
+        // profil de l'utilisateur connecté : un clic ouvre SON menu (différent selon Auditeur / Admin)
+        SidebarItem profil = new SidebarItem(utilisateur.identifiant(), utilisateur.role() + "  ·  ouvrir le menu",
                 new Color(0x2EC4B6), new Color(0x6A5AE0));
-        journal.setAction(onJournal);
-        bottom.add(journal, BorderLayout.CENTER);
+        profil.setAction(() -> {
+            JPopupMenu popup = menu(utilisateur, onOption);
+            popup.show(profil, 0, -popup.getPreferredSize().height - 4); // le menu s'ouvre vers le haut
+        });
+        bottom.add(profil, BorderLayout.CENTER);
         add(bottom, BorderLayout.SOUTH);
+    }
+
+    /** Construit le menu à partir de {@code utilisateur.menu()} : appel polymorphe. */
+    private static JPopupMenu menu(Utilisateur utilisateur, Consumer<OptionMenu> onOption) {
+        JPopupMenu popup = new JPopupMenu();
+        popup.setBackground(Theme.CARD_HI);
+        popup.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.BORDER),
+                new EmptyBorder(4, 0, 4, 0)));
+        for (OptionMenu option : utilisateur.menu()) {
+            if (option == OptionMenu.JOURNAL) popup.addSeparator();
+            JMenuItem item = new JMenuItem(option.libelle());
+            item.setFont(Theme.font(Font.PLAIN, 13.5f));
+            item.setForeground(option == OptionMenu.DECONNEXION ? Dialogues.ERREUR : Theme.TEXT);
+            item.setBackground(Theme.CARD_HI);
+            item.setOpaque(true);
+            item.setBorder(new EmptyBorder(7, 16, 7, 40));
+            item.addActionListener(e -> onOption.accept(option));
+            popup.add(item);
+        }
+        return popup;
     }
 
     public void clearSelection() {

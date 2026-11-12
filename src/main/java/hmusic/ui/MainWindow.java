@@ -1,7 +1,17 @@
 package hmusic.ui;
 
 import hmusic.analysis.MoodAnalyzer;
+import hmusic.catalogue.Catalogue;
 import hmusic.data.MoodJournal;
+import hmusic.data.Stockage;
+import hmusic.reco.Playlist;
+import hmusic.reco.Recommandeur;
+import hmusic.stream.ImportJamendo;
+import hmusic.stream.JamendoClient;
+import hmusic.utilisateur.Auditeur;
+import hmusic.utilisateur.GestionUtilisateurs;
+import hmusic.utilisateur.OptionMenu;
+import hmusic.utilisateur.Utilisateur;
 import hmusic.engine.EngineListener;
 import hmusic.engine.MoodEngine;
 import hmusic.model.Journey;
@@ -65,6 +75,12 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     private final Slider journeyProgress = new Slider(0, null);
     private final Timer journeyTimer = new Timer(200, e -> journeyTick());
 
+    private final Utilisateur utilisateur;
+    private final GestionUtilisateurs comptes;
+    private final Catalogue catalogue;
+    private final Recommandeur recommandeur;
+    private final Runnable surDeconnexion;
+
     private Mode mode = Mode.COMPOSE;
     private Mood mood = Mood.NEUTRAL;
     private Journey journey;
@@ -72,11 +88,21 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     private long journeyStart;
     private long lastJourneyTick;
 
-    public MainWindow(MoodEngine engine, ListenController listen, MoodJournal journal) {
-        super("hmusic — ta musique, ton humeur");
+    /**
+     * @param surDeconnexion appelé quand l'utilisateur se déconnecte (la fenêtre est déjà fermée)
+     */
+    public MainWindow(MoodEngine engine, ListenController listen, Utilisateur utilisateur, GestionUtilisateurs comptes,
+                      Catalogue catalogue, Recommandeur recommandeur, Runnable surDeconnexion) {
+        super("hmusic — " + utilisateur.identifiant());
         this.engine = engine;
         this.listen = listen;
-        this.journal = journal;
+        this.utilisateur = utilisateur;
+        this.comptes = comptes;
+        this.catalogue = catalogue;
+        this.recommandeur = recommandeur;
+        this.surDeconnexion = surDeconnexion;
+        // un journal d'humeur par utilisateur
+        this.journal = new MoodJournal(Stockage.DOSSIER.resolve("journal-" + utilisateur.identifiant().toLowerCase(Locale.ROOT) + ".csv"));
 
         pad = new MoodPad(new MoodPad.Listener() {
             @Override public void moodPicked(Mood m, boolean adjusting) { onPadPick(m, adjusting); }
@@ -88,10 +114,12 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             }
         });
         player = new PlayerBar(this::togglePlay, this::next, this::exportMidi, this::setVolume, this::seek);
-        sidebar = new Sidebar(this::playStation, this::startJourney, this::openJournal);
+        sidebar = new Sidebar(utilisateur, this::playStation, this::startJourney, this::choisirOption);
         composeButton = new PillButton("Lancer la musique", true, this::analyzeText);
         modeSwitch = new ModeSwitch(this::setMode);
         listenPanel = new ListenPanel(listen);
+        // seul un Auditeur a des favoris et des abonnements : les boutons n'apparaissent que pour lui
+        if (utilisateur instanceof Auditeur auditeur) listenPanel.setActionsAuditeur(actionsAuditeur(auditeur));
         input.addActionListener(e -> analyzeText());
 
         JPanel root = new JPanel(new BorderLayout());
@@ -109,6 +137,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
+                comptes.sauvegarder();
                 listen.shutdown();
                 engine.shutdown();
             }
@@ -121,8 +150,121 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         pad.setMemories(journal.recentMoods(MEMORY_DOTS));
         applyMood(Mood.NEUTRAL, false);
         showTrack(engine.getTitle(), engine.getProfile());
+        feedback.setText("Bienvenue " + utilisateur.identifiant() + " (" + utilisateur.role().toLowerCase(Locale.FRANCE)
+                + ") ! Ton menu est en bas à gauche.");
         journal.dominantSince(LocalDateTime.now().minusDays(7)).ifPresent(s ->
-                feedback.setText("Ces derniers jours, ton humeur dominante était : " + s.label().toLowerCase(Locale.FRANCE) + "."));
+                feedback.setText("Bienvenue " + utilisateur.identifiant() + " ! Ces derniers jours, ton humeur dominante était : "
+                        + s.label().toLowerCase(Locale.FRANCE) + "."));
+    }
+
+    // ================================================================== menu de l'utilisateur
+
+    /** Exécute l'option choisie dans le menu (les options proposées dépendent du type d'utilisateur). */
+    private void choisirOption(OptionMenu option) {
+        switch (option) {
+            case MES_FAVORIS -> AuditeurDialogs.favoris(this, (Auditeur) utilisateur, this::jouerListe,
+                    this::jouerArtiste, comptes::sauvegarder);
+            case MES_ABONNEMENTS -> AuditeurDialogs.abonnements(this, (Auditeur) utilisateur, this::jouerArtiste,
+                    comptes::sauvegarder);
+            case AJOUTER_MORCEAU -> AdminDialogs.ajouterMorceau(this, catalogue, catalogue::sauvegarder);
+            case GERER_CATALOGUE -> AdminDialogs.gererCatalogue(this, catalogue, catalogue::sauvegarder);
+            case IMPORTER_CATALOGUE -> importerCatalogue();
+            case JOURNAL -> openJournal();
+            case DECONNEXION -> deconnecter();
+        }
+    }
+
+    private ListenPanel.ActionsAuditeur actionsAuditeur(Auditeur a) {
+        return new ListenPanel.ActionsAuditeur() {
+            @Override public boolean estFavori(Morceau m) { return a.estFavori(m); }
+
+            @Override public void basculerFavori(Morceau m) {
+                boolean ajoute = a.basculerFavori(m);
+                comptes.sauvegarder();
+                feedback.setText(ajoute ? "« " + m.titre() + " » ajouté à tes favoris." : "« " + m.titre() + " » retiré de tes favoris.");
+            }
+
+            @Override public boolean estArtisteFavori(String artiste) { return a.estArtisteFavori(artiste); }
+
+            @Override public void basculerArtisteFavori(String artiste) {
+                boolean ajoute = a.basculerArtisteFavori(artiste);
+                comptes.sauvegarder();
+                feedback.setText(artiste + (ajoute ? " fait partie de tes artistes favoris." : " ne fait plus partie de tes artistes favoris."));
+            }
+
+            @Override public boolean estAbonne(String artiste) { return a.estAbonne(artiste); }
+
+            @Override public void basculerAbonnement(String artiste) {
+                boolean ajoute = a.basculerAbonnement(artiste);
+                comptes.sauvegarder();
+                feedback.setText(ajoute ? "Tu es abonné·e à " + artiste + " : retrouve ses morceaux dans « Mes abonnements »."
+                        : "Tu n'es plus abonné·e à " + artiste + ".");
+            }
+        };
+    }
+
+    /** Joue une liste précise (favoris…) : passe en mode Écouter si besoin. */
+    private void jouerListe(List<Morceau> morceaux, String nom) {
+        allerEnModeEcouter();
+        listen.playPlaylist(morceaux, nom);
+        feedback.setText("Lecture : " + nom);
+    }
+
+    private void jouerArtiste(String artiste) {
+        allerEnModeEcouter();
+        listen.playArtist(artiste);
+    }
+
+    private void allerEnModeEcouter() {
+        stopJourney();
+        sidebar.clearSelection();
+        if (!listening()) setMode(Mode.LISTEN);
+    }
+
+    private void importerCatalogue() {
+        Optional<JamendoClient> client = listen.jamendo();
+        if (client.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Connecte d'abord Jamendo : passe en mode Écouter et colle ton Client ID.",
+                    "Jamendo non configuré", JOptionPane.INFORMATION_MESSAGE);
+            setMode(Mode.LISTEN);
+            return;
+        }
+        feedback.setText("Import du catalogue depuis Jamendo…");
+        new SwingWorker<List<Morceau>, String>() {
+            @Override protected List<Morceau> doInBackground() throws Exception {
+                return ImportJamendo.telecharger(client.get(), 20, this::publish);
+            }
+
+            @Override protected void process(List<String> messages) {
+                feedback.setText("Import du catalogue depuis Jamendo : " + messages.get(messages.size() - 1));
+            }
+
+            @Override protected void done() {
+                try {
+                    int ajoutes = 0;
+                    for (Morceau m : get()) if (catalogue.ajouter(m)) ajoutes++; // ajout sur le thread Swing
+                    catalogue.sauvegarder();
+                    feedback.setText("Import terminé : " + ajoutes + " nouveau(x) morceau(x). Le catalogue en compte "
+                            + catalogue.taille() + " dans " + catalogue.genres().size() + " genres.");
+                } catch (Exception e) {
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    feedback.setText("Import impossible : " + cause.getMessage());
+                }
+            }
+        }.execute();
+    }
+
+    private void deconnecter() {
+        stopJourney();
+        engine.pause();
+        listen.setActive(false, false);
+        engine.removeListener(this);
+        engine.removeListener(viz);
+        listen.removeView(this);
+        listen.removeView(listenPanel);
+        comptes.sauvegarder();
+        dispose();
+        surDeconnexion.run();
     }
 
     // ================================================================== construction de l'UI
@@ -242,6 +384,8 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             engine.pause();
             refreshListenBar();
             listen.setActive(true, wasPlaying);
+            feedback.setText("Mode Écouter : écris ton humeur et le " + recommandeur.nom()
+                    + " te compose une playlist du catalogue (" + catalogue.taille() + " morceaux).");
         } else {
             listen.setActive(false, false);
             showTrack(engine.getTitle(), engine.getProfile());
@@ -326,6 +470,10 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             feedback.setText("Écris quelques mots sur ce que tu ressens, par exemple « stressé par les partiels ».");
             return;
         }
+        if (listening()) {        // en mode Écouter : playlist proposée par le Recommandeur
+            proposerPlaylist(text);
+            return;
+        }
         Optional<MoodAnalyzer.Analysis> result = analyzer.analyze(text);
         if (result.isEmpty()) {
             feedback.setText("Je n'ai pas reconnu d'émotion… essaie avec : stressé, fatigué, heureux, nostalgique, motivé, en colère…");
@@ -344,6 +492,57 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         }
         feedback.setText("J'ai compris : " + a.mood().sector().label().toLowerCase(Locale.FRANCE)
                 + "   (mots repérés : " + String.join(", ", a.words()) + ")");
+    }
+
+    // ================================================================== playlist du Recommandeur
+
+    private static final int TAILLE_PLAYLIST = 12;
+
+    /**
+     * Demande une playlist au Recommandeur (IA ou hors ligne : cette méthode ne sait pas lequel,
+     * elle ne connaît que l'interface {@link Recommandeur}).
+     */
+    private void proposerPlaylist(String humeur) {
+        if (catalogue.estVide()) {
+            feedback.setText("Le catalogue est vide : un administrateur doit d'abord l'importer (menu > Importer depuis Jamendo).");
+            return;
+        }
+        stopJourney();
+        sidebar.clearSelection();
+        feedback.setText("Le " + recommandeur.nom() + " prépare ta playlist…");
+        // copie du catalogue : le calcul se fait en arrière-plan pendant que l'interface reste utilisable
+        Catalogue copie = new Catalogue();
+        catalogue.tous().forEach(copie::ajouter);
+
+        new SwingWorker<Playlist, Void>() {
+            @Override protected Playlist doInBackground() throws Exception {
+                return recommandeur.recommander(humeur, copie, TAILLE_PLAYLIST);
+            }
+
+            @Override protected void done() {
+                Playlist p;
+                try {
+                    p = get();
+                } catch (Exception e) {
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    feedback.setText("Pas de playlist : " + cause.getMessage());
+                    return;
+                }
+                if (p.morceaux().isEmpty()) {
+                    feedback.setText("Le " + p.source() + " n'a proposé aucun morceau du catalogue.");
+                    return;
+                }
+                listen.playPlaylist(p.morceaux(), "Playlist « " + humeur + " »");
+                analyzer.analyze(humeur).ifPresent(a -> applyMood(a.mood(), false)); // pour colorer l'interface
+                logMood(mood, "playlist « " + humeur + " »");
+                String msg = "Playlist proposée par le " + p.source() + " : " + p.morceaux().size() + " morceau(x).";
+                if (!p.rejetes().isEmpty()) {
+                    msg += "  " + p.rejetes().size() + " proposition(s) rejetée(s) car absente(s) du catalogue : "
+                            + String.join(" ; ", p.rejetes());
+                }
+                feedback.setText(msg);
+            }
+        }.execute();
     }
 
     // ================================================================== voyages guidés
