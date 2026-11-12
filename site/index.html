@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hmusic — ta musique, ton humeur</title>
+<meta name="description" content="hmusic compose en direct une musique unique selon ton humeur, ou te propose une playlist de vrais morceaux choisie par une IA. Application Java gratuite pour Windows.">
+<link rel="icon" type="image/png" href="images/logo.png">
+<meta property="og:title" content="hmusic — ta musique, ton humeur">
+<meta property="og:description" content="Une appli de musique qui part de ton humeur : composition générative en direct et playlists IA de vrais morceaux.">
+<meta property="og:image" content="images/ecouter.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1014; --bg-2: #08090b; --card: #17191f; --card-hi: #22252e; --border: #2a2d36;
+    --text: #f2f3f5; --muted: #8d93a0; --accent: #8b6cff;
+    --mood: #8b6cff; /* change avec le pavé d'humeur */
+    --radius: 22px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: Inter, "Segoe UI", system-ui, sans-serif; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+  .wrap { width: min(1160px, 100% - 32px); margin-inline: auto; }
+
+  /* ---------- navigation ---------- */
+  nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 82%, transparent);
+        backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; text-decoration: none; }
+  .brand img { width: 32px; height: 32px; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: var(--muted); }
+  nav .links a { text-decoration: none; transition: color .2s; }
+  nav .links a:hover { color: var(--text); }
+
+  /* ---------- boutons ---------- */
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 999px;
+         font-weight: 700; font-size: 15px; text-decoration: none; transition: transform .15s, background .3s, box-shadow .3s; }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: var(--mood); color: #111216;
+                 box-shadow: 0 10px 40px -10px color-mix(in srgb, var(--mood) 70%, transparent); }
+  .btn-ghost { border: 1px solid var(--border); background: var(--card); }
+  .btn-ghost:hover { background: var(--card-hi); }
+  .btn svg { width: 18px; height: 18px; }
+
+  /* ---------- héro ---------- */
+  .hero { position: relative; padding: 80px 0 60px; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: -30% -10% auto 30%; height: 700px; z-index: -1;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--mood) 35%, transparent), transparent);
+    transition: background .6s; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 56px; align-items: center; }
+  .eyebrow { display: inline-block; padding: 6px 14px; border-radius: 999px; background: var(--card);
+             border: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--muted); }
+  h1 { font-size: clamp(42px, 6vw, 72px); line-height: 1.02; letter-spacing: -0.03em; margin: 18px 0 18px; font-weight: 800; }
+  h1 .mood-word { color: var(--mood); transition: color .5s; }
+  .lead { font-size: 19px; color: #c9ccd3; max-width: 34em; margin: 0 0 32px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .small { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  /* ---------- pavé d'humeur interactif ---------- */
+  .pad-card { background: var(--card); border: 1px solid var(--border); border-radius: 28px; padding: 22px; }
+  .pad-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .pad-head strong { font-size: 15px; }
+  .pad-head span { font-size: 13px; color: var(--muted); }
+  .pad { position: relative; aspect-ratio: 1; border-radius: 20px; overflow: hidden; cursor: crosshair; touch-action: none; outline: none; }
+  .pad:focus-visible { box-shadow: 0 0 0 3px var(--mood); }
+  .pad canvas { width: 100%; height: 100%; display: block; }
+  .pad .axis { position: absolute; font-size: 10.5px; letter-spacing: .08em; color: rgba(255,255,255,.45); pointer-events: none; }
+  .pad .label { position: absolute; transform: translate(-50%, -50%); font-size: 12.5px; font-weight: 700;
+                color: rgba(255,255,255,.55); pointer-events: none; transition: color .2s; }
+  .pad .label.on { color: #fff; }
+  .cursor { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
+            border: 2.5px solid #fff; background: var(--mood); pointer-events: none;
+            box-shadow: 0 0 0 10px color-mix(in srgb, var(--mood) 35%, transparent), 0 0 40px 10px color-mix(in srgb, var(--mood) 50%, transparent); }
+  .readout { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+  .readout .name { font-size: 22px; font-weight: 800; color: var(--mood); margin-right: 6px; transition: color .4s; }
+  .chip { padding: 5px 12px; border-radius: 999px; background: var(--card-hi); font-size: 12.5px; font-weight: 600; }
+
+  /* ---------- sections ---------- */
+  section { padding: 80px 0; }
+  .kicker { font-size: 13px; font-weight: 700; letter-spacing: .12em; color: var(--mood); text-transform: uppercase; transition: color .5s; }
+  h2 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -0.02em; line-height: 1.1; margin: 10px 0 14px; }
+  .section-lead { color: var(--muted); font-size: 17px; max-width: 40em; margin: 0 0 40px; }
+
+  .shot { border-radius: 18px; overflow: hidden; border: 1px solid var(--border);
+          box-shadow: 0 40px 120px -40px color-mix(in srgb, var(--mood) 45%, #000); background: var(--bg-2); }
+  .shot .bar { display: flex; gap: 7px; padding: 12px 16px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+  .shot .bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--card-hi); }
+
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .mode { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .mode h3 { margin: 0; font-size: 24px; }
+  .mode p { margin: 0; color: #c9ccd3; }
+  .mode img { border-radius: 14px; border: 1px solid var(--border); margin-top: auto; }
+  .tag { align-self: flex-start; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .tag.a { background: rgba(139,108,255,.18); color: #b9a7ff; }
+  .tag.b { background: rgba(46,196,182,.16); color: #6fe3d6; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .feature { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; transition: border-color .3s, transform .2s; }
+  .feature:hover { border-color: color-mix(in srgb, var(--mood) 60%, var(--border)); transform: translateY(-3px); }
+  .feature .ico { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 16px;
+                  background: color-mix(in srgb, var(--mood) 18%, var(--card-hi)); transition: background .5s; }
+  .feature .ico svg { width: 22px; height: 22px; stroke: var(--text); }
+  .feature h3 { margin: 0 0 8px; font-size: 18px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .stack { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stack span { padding: 9px 16px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); font-size: 14px; font-weight: 600; }
+
+  .download { background: linear-gradient(135deg, color-mix(in srgb, var(--mood) 22%, var(--card)), var(--card));
+              border: 1px solid var(--border); border-radius: 32px; padding: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; transition: background .6s; }
+  .steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 14px; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; color: #c9ccd3; }
+  .steps li::before { content: counter(s); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+                      background: var(--card-hi); font-weight: 800; color: var(--text); }
+  .steps b { color: var(--text); }
+  code { background: var(--bg-2); padding: 2px 7px; border-radius: 6px; font-size: .9em; }
+  .note { margin-top: 22px; padding: 14px 18px; border-radius: 14px; background: rgba(0,0,0,.25); font-size: 14px; color: var(--muted); }
+
+  footer { padding: 40px 0 60px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+
+  @media (max-width: 900px) {
+    /* minmax(0, 1fr) : la colonne peut rétrécir sous la largeur naturelle de son contenu */
+    .hero .wrap, .modes, .download { grid-template-columns: minmax(0, 1fr); }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    nav .links { display: none; }
+    .download { padding: 28px; }
+  }
+  @media (max-width: 560px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .pad-head span { display: none; }
+    .lead { font-size: 17px; }
+    .hero { padding-top: 48px; }
+    section { padding: 56px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="images/logo.png" alt="">hmusic</a>
+    <div class="links">
+      <a href="#modes">Deux modes</a>
+      <a href="#fonctions">Fonctionnalités</a>
+      <a href="#technique">Sous le capot</a>
+      <a href="#telecharger">Télécharger</a>
+    </div>
+    <a class="btn btn-ghost" style="padding:9px 16px;font-size:14px" href="https://github.com/dechiaraluca/hmusic">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Application Java · gratuite · Windows</span>
+      <h1>Ta musique,<br>ton <span class="mood-word" id="moodWord">humeur</span>.</h1>
+      <p class="lead">hmusic part de ce que tu ressens. Il <b>compose en direct</b> une musique qui n'a jamais existé,
+        ou te propose une <b>playlist de vrais morceaux</b> choisie par une IA, et la fait évoluer avec toi.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/dechiaraluca/hmusic/releases/latest/download/hmusic-windows.zip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+          Télécharger pour Windows
+        </a>
+        <a class="btn btn-ghost" href="#modes">Voir comment ça marche</a>
+      </div>
+      <p class="small">Environ 55 Mo · Java inclus, rien à installer · Windows 10 et 11</p>
+    </div>
+
+    <div class="pad-card">
+      <div class="pad-head"><strong>Essaie le pavé d'humeur</strong><span>survole ou touche le carré</span></div>
+      <div class="pad" id="pad" tabindex="0" role="slider" aria-label="Pavé d'humeur : flèches pour déplacer"
+           aria-valuetext="Neutre">
+        <canvas id="padCanvas" width="360" height="360"></canvas>
+        <span class="axis" style="top:10px;left:50%;transform:translateX(-50%)">+ ÉNERGIE</span>
+        <span class="axis" style="bottom:10px;left:50%;transform:translateX(-50%)">CALME</span>
+        <span class="axis" style="left:12px;top:56%">DÉSAGRÉABLE</span>
+        <span class="axis" style="right:12px;top:56%">AGRÉABLE</span>
+        <div class="cursor" id="cursor"></div>
+      </div>
+      <div class="readout">
+        <span class="name" id="moodName">Neutre</span>
+        <span class="chip" id="bpm">102 BPM</span>
+        <span class="chip" id="scale">mode Dorien</span>
+        <span class="chip" id="instr">ambiance Brume</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="apercu" style="padding-top:20px">
+  <div class="wrap">
+    <div class="shot">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <img src="images/ecouter.png" alt="Fenêtre principale de hmusic en mode Écouter : pavé d'humeur, file d'attente de morceaux Jamendo" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section id="modes">
+  <div class="wrap">
+    <span class="kicker">Deux façons d'écouter</span>
+    <h2>Inventée pour toi, ou choisie pour toi.</h2>
+    <p class="section-lead">On passe d'un mode à l'autre d'un clic, sans perdre son humeur.</p>
+    <div class="modes">
+      <article class="mode">
+        <span class="tag a">Mode Composer</span>
+        <h3>Une musique qui n'existe nulle part ailleurs</h3>
+        <p>Aucun fichier audio : hmusic compose note par note, en temps réel. Ton humeur devient des règles musicales :
+          tempo, gamme, accords, instruments, batterie et réverbération. Glisse le curseur, la musique se transforme
+          sous tes oreilles. Chaque morceau reçoit un titre et une pochette inventés, et s'exporte en MIDI.</p>
+        <img src="images/composer.png" alt="Mode Composer : visualiseur et morceau généré" loading="lazy">
+      </article>
+      <article class="mode">
+        <span class="tag b">Mode Écouter</span>
+        <h3>De vrais morceaux, triés sur le volet</h3>
+        <p>Écris ce que tu ressens (« crevé mais content ») : une IA compose une playlist à partir d'un catalogue de
+          morceaux libres de Jamendo. Chaque proposition est vérifiée : un morceau inventé par l'IA est rejeté.
+          Pochettes, égaliseur en direct, favoris et abonnements aux artistes.</p>
+        <img src="images/lecteur.png" alt="Mode Écouter : morceau en cours et file d'attente" loading="lazy">
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="fonctions">
+  <div class="wrap">
+    <span class="kicker">Fonctionnalités</span>
+    <h2>Pensé autour de ce que tu ressens.</h2>
+    <p class="section-lead">Pas de genres ni de top 50 : tout part de ton humeur.</p>
+    <div class="grid">
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="15" cy="9" r="2.5"/><path d="M12 3v18M3 12h18" opacity=".4"/></svg></div>
+        <h3>Pavé d'humeur</h3>
+        <p>Basé sur le modèle des émotions de Russell : agréable ↔ désagréable, calme ↔ énergique. Huit familles d'émotions, des milliers de nuances.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m16 15 2 2 4-4"/></svg></div>
+        <h3>Dis-le avec tes mots</h3>
+        <p>« Très stressé par les partiels », « pas mal du tout » : hmusic comprend les phrases en français, les négations et les nuances.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 17c6-1 4-9 10-10" stroke-dasharray="3 3"/></svg></div>
+        <h3>Voyages guidés</h3>
+        <p>Du stress vers la sérénité, de la tristesse vers la joie : la musique rejoint ton humeur, puis t'emmène doucement ailleurs (principe d'iso-modulation, issu de la musicothérapie).</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5L12 15.6 7.1 18.2l.9-5.5-4-3.9 5.5-.8z"/></svg></div>
+        <h3>Playlist IA contrôlée</h3>
+        <p>L'IA choisit uniquement dans le catalogue. Si elle invente un morceau, il est détecté et écarté, et l'appli le signale.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></div>
+        <h3>Ton espace</h3>
+        <p>Compte personnel, mots de passe protégés, favoris, abonnements à tes artistes et un journal d'humeur en couleurs.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>Garde tes créations</h3>
+        <p>Toute la musique composée pendant une séance s'exporte en fichier MIDI, à ouvrir dans MuseScore, GarageBand ou FL Studio.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="technique">
+  <div class="wrap">
+    <span class="kicker">Sous le capot</span>
+    <h2>100 % Java, de A à Z.</h2>
+    <p class="section-lead">Un projet étudiant en programmation orientée objet : héritage, classes abstraites, interfaces,
+      polymorphisme, collections, threads, appels d'API REST et tests unitaires.</p>
+    <div class="stack">
+      <span>Java 17+</span><span>Swing + FlatLaf</span><span>javax.sound.midi</span><span>Banque de sons GeneralUser GS</span>
+      <span>Décodage MP3 (JLayer)</span><span>FFT maison</span><span>API Jamendo</span><span>IA via l'API Groq</span>
+      <span>Gson</span><span>Sérialisation</span><span>SHA-256 + sel</span><span>JUnit 5</span><span>Maven</span>
+    </div>
+  </div>
+</section>
+
+<section id="telecharger">
+  <div class="wrap">
+    <div class="download">
+      <div>
+        <span class="kicker">Télécharger</span>
+        <h2>Prêt en une minute.</h2>
+        <p class="section-lead" style="margin-bottom:28px">Gratuit, sans publicité. Java est inclus dans le téléchargement.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/dechiaraluca/hmusic/releases/latest/download/hmusic-windows.zip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+            hmusic pour Windows
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/dechiaraluca/hmusic">Code source</a>
+        </div>
+      </div>
+      <div>
+        <ol class="steps">
+          <li><span><b>Décompresse</b> le fichier <code>hmusic-windows.zip</code> où tu veux.</span></li>
+          <li><span>Lance <b>hmusic.exe</b> dans le dossier <code>hmusic</code>.</span></li>
+          <li><span><b>Crée ton compte</b> : le mode Composer marche tout de suite.</span></li>
+          <li><span>Pour le mode Écouter, colle un <b>Client ID Jamendo</b> gratuit (devportal.jamendo.com). Pour la playlist IA, définis la variable <code>AI_API_KEY</code> avec une clé Groq.</span></li>
+        </ol>
+        <p class="note">Windows peut afficher « Windows a protégé votre ordinateur », car l'appli n'est pas signée
+          (c'est payant). Clique sur <b>Informations complémentaires</b> puis <b>Exécuter quand même</b>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>hmusic · projet étudiant de Luca De Chiara</span>
+    <span>Musiques : artistes de Jamendo (Creative Commons) · Sons : GeneralUser GS (S. Christian Collins)</span>
+  </div>
+</footer>
+
+<script>
+  // Mêmes règles que l'application (classes Mood, Sector, Scale, Instrumentation, MusicalProfile)
+  const RING = [
+    ["Heureux", "#FFC94A"], ["Euphorique", "#FF7A59"], ["Électrisé", "#FF3D8B"], ["Tendu", "#E5383B"],
+    ["Triste", "#3A7BD5"], ["Mélancolique", "#6A5AE0"], ["Somnolent", "#9B87D9"], ["Serein", "#2EC4B6"]];
+  const NEUTRE = "#9AA0A6", BG = "#0F1014";
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * Math.max(0, Math.min(1, t))));
+  const css = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const clamp = x => Math.max(-1, Math.min(1, x));
+
+  function mood(v, e) {
+    v = clamp(v); e = clamp(e);
+    const intensity = Math.min(1, Math.hypot(v, e));
+    let a = Math.atan2(e, v) * 180 / Math.PI; if (a < 0) a += 360;
+    const i = Math.floor(a / 45) % 8, f = (a - i * 45) / 45;
+    const ring = mix(hex(RING[i][1]), hex(RING[(i + 1) % 8][1]), f);
+    const color = mix(hex(NEUTRE), ring, Math.min(1, intensity * 1.4));
+    const name = intensity < 0.2 ? "Neutre" : RING[Math.round(a / 45) % 8][0];
+    return { v, e, intensity, color, name };
+  }
+
+  function profile(m) {
+    const e01 = (m.e + 1) / 2;
+    const bpm = Math.round(64 + e01 * 76);
+    let scale;
+    if (m.v > 0.5) scale = m.e < 0 ? "Lydien" : "Majeur";
+    else if (m.v > 0.15) scale = m.e < 0.2 ? "Majeur" : "Mixolydien";
+    else if (m.v > -0.2) scale = "Dorien";
+    else if (m.v > -0.6) scale = "Mineur";
+    else scale = m.e > 0.25 ? "Phrygien" : "Mineur";
+    let instr;
+    if (m.intensity < 0.2) instr = "Brume";
+    else if (m.v >= 0 && m.e >= 0) instr = m.e > 0.45 ? "Néon" : "Soleil";
+    else if (m.v >= 0) instr = "Aquarelle";
+    else instr = m.e >= 0 ? "Orage" : "Pluie";
+    return { bpm, scale, instr };
+  }
+
+  // fond du pavé : même dégradé que dans l'appli, calculé pixel par pixel
+  const canvas = document.getElementById("padCanvas"), ctx = canvas.getContext("2d");
+  const S = canvas.width, img = ctx.createImageData(S, S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const m = mood(x / (S - 1) * 2 - 1, 1 - y / (S - 1) * 2);
+    const c = mix(hex(BG), m.color, 0.18 + 0.5 * m.intensity), k = (y * S + x) * 4;
+    img.data[k] = c[0]; img.data[k + 1] = c[1]; img.data[k + 2] = c[2]; img.data[k + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.beginPath();
+  ctx.moveTo(S / 2, 0); ctx.lineTo(S / 2, S); ctx.moveTo(0, S / 2); ctx.lineTo(S, S / 2); ctx.stroke();
+
+  const pad = document.getElementById("pad"), cursor = document.getElementById("cursor");
+  const labels = RING.map(([n], i) => {
+    const el = document.createElement("span"); el.className = "label"; el.textContent = n;
+    const a = i * Math.PI / 4;
+    el.style.left = (50 + Math.cos(a) * 37) + "%"; el.style.top = (50 - Math.sin(a) * 37) + "%";
+    pad.appendChild(el); return el;
+  });
+
+  let state = { v: 0, e: 0 };
+  function render() {
+    const m = mood(state.v, state.e), p = profile(m);
+    cursor.style.left = ((m.v + 1) / 2 * 100) + "%";
+    cursor.style.top = ((1 - m.e) / 2 * 100) + "%";
+    const c = css(mix(m.color, [255, 255, 255], 0.1));
+    document.documentElement.style.setProperty("--mood", m.intensity < 0.2 ? "#8b6cff" : c);
+    document.getElementById("moodName").textContent = m.name;
+    document.getElementById("moodWord").textContent = m.intensity < 0.2 ? "humeur" : m.name.toLowerCase();
+    document.getElementById("bpm").textContent = p.bpm + " BPM";
+    document.getElementById("scale").textContent = "mode " + p.scale;
+    document.getElementById("instr").textContent = "ambiance " + p.instr;
+    pad.setAttribute("aria-valuetext", m.name);
+    labels.forEach(l => l.classList.toggle("on", l.textContent === m.name));
+  }
+  function fromEvent(ev) {
+    const r = pad.getBoundingClientRect();
+    state = { v: (ev.clientX - r.left) / r.width * 2 - 1, e: 1 - (ev.clientY - r.top) / r.height * 2 };
+    render();
+  }
+  pad.addEventListener("pointermove", fromEvent);
+  pad.addEventListener("pointerdown", fromEvent);
+  pad.addEventListener("keydown", ev => {
+    const d = { ArrowLeft: [-.1, 0], ArrowRight: [.1, 0], ArrowUp: [0, .1], ArrowDown: [0, -.1] }[ev.key];
+    if (!d) return;
+    ev.preventDefault();
+    state = { v: clamp(state.v + d[0]), e: clamp(state.e + d[1]) };
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

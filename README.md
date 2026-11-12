@@ -22,6 +22,14 @@ build.bat      :: compile seulement -> target\hmusic.jar
 Ou depuis un terminal : `mvnw.cmd package` puis `java -jar target\hmusic.jar`.
 Le projet s'ouvre aussi directement dans IntelliJ, Eclipse ou VS Code (projet Maven).
 
+### Version Windows autonome et site de présentation
+
+- `dist.bat` fabrique `target\hmusic-windows.zip` : un dossier avec `hmusic.exe`, Java intégré (`jpackage`) et
+  la banque de sons. Rien à installer pour la personne qui le télécharge. Ce zip est publié dans les
+  *Releases* GitHub.
+- `site/` contient la page de présentation (HTML statique), publiée par Netlify grâce à `netlify.toml`.
+  Le bouton « Télécharger » pointe vers `releases/latest/download/hmusic-windows.zip`.
+
 ### Activer le mode Écouter (une seule fois)
 
 1. Crée un compte gratuit sur [devportal.jamendo.com](https://devportal.jamendo.com/).

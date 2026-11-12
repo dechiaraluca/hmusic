@@ -1,0 +1,9 @@
+# Netlify publie simplement le dossier « site » (page statique, rien à compiler)
+[build]
+  publish = "site"
+  command = ""
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
