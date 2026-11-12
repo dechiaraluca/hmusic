@@ -11,6 +11,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
@@ -195,13 +196,23 @@ public class ListenPanel extends JPanel implements ListenController.View {
         private String status = " ";
         private boolean statusError;
         private ActionsAuditeur actionsAuditeur;
-        /** Zones cliquables dessinées (boutons d'action). */
-        private record Hit(Rectangle zone, Runnable action) {}
+        /** Zones cliquables dessinées (boutons d'action), avec leur bulle d'aide. */
+        private record Hit(Rectangle zone, Runnable action, String aide) {}
+
+        private enum Icone { ETOILE, COEUR, CLOCHE, LIEN }
+
+        private record Bouton(String libelle, Icone icone, boolean actif, String aide, Runnable action) {}
+
+        @Override public String getToolTipText(MouseEvent e) {
+            for (Hit h : hits) if (h.zone().contains(e.getPoint())) return h.aide();
+            return null;
+        }
         private final List<Hit> hits = new ArrayList<>();
         private final Timer anim = new Timer(16, e -> animate());
 
         NowPlaying() {
             setOpaque(false);
+            ToolTipManager.sharedInstance().registerComponent(this); // bulles d'aide des boutons
             addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
                     for (Hit h : List.copyOf(hits)) {
@@ -359,8 +370,30 @@ public class ListenPanel extends JPanel implements ListenController.View {
         /** @param h ordonnée maximale utilisable (au-dessus de l'égaliseur) */
         private void paintTrack(Graphics2D g, int w, int h) {
             int top = 66;
-            int s = Math.max(80, Math.min(200, h - top));
             int ax = 24;
+
+            // 1. les boutons d'action, placés sous la pochette sur toute la largeur
+            hits.clear();
+            List<Bouton> boutons = boutons();
+            final int bh = 32, gap = 10, largeur = w - 2 * ax;
+            g.setFont(Theme.font(Font.BOLD, 12.5f));
+            FontMetrics bfm = g.getFontMetrics();
+            List<Rectangle> places = new ArrayList<>();   // position de chaque bouton, relative au début de la rangée
+            int bx = 0, by = 0;
+            for (Bouton b : boutons) {
+                int bw = b.libelle().isEmpty() ? bh                        // bouton rond, icône seule
+                        : 14 + 15 + 8 + bfm.stringWidth(b.libelle()) + 16; // marge + icône + espace + texte + marge
+                if (bx + bw > largeur && bx > 0) {          // plus de place sur la ligne : on passe à la suivante
+                    bx = 0;
+                    by += bh + gap;
+                }
+                places.add(new Rectangle(bx, by, bw, bh));
+                bx += bw + gap;
+            }
+            int hauteurBoutons = boutons.isEmpty() ? 0 : by + bh + 16;
+
+            // 2. la pochette prend la place restante (entre 90 et 200 px)
+            int s = Math.max(90, Math.min(200, h - top - hauteurBoutons));
             RoundRectangle2D art = new RoundRectangle2D.Double(ax, top, s, s, 18, 18);
             // ombre portée colorée
             g.setColor(Theme.alpha(glow, 60));
@@ -392,64 +425,60 @@ public class ListenPanel extends JPanel implements ListenController.View {
                 g.setColor(Theme.MUTED);
                 g.drawString(Theme.fit(g.getFontMetrics(), "Album : " + track.album() + "  ·  " + track.dureeTexte(), maxW), tx, y);
             }
-            // tags
-            y += 16;
+            // tags (une seule ligne)
+            int tagsY = y + 14;
             int cx = tx;
             for (String tag : track.tags()) {
                 g.setFont(Theme.font(Font.BOLD, 11));
                 int cw = g.getFontMetrics().stringWidth(tag) + 20;
                 if (cx + cw > tx + maxW) break;
-                cx += drawChip(g, tag, cx, y) + 6;
+                cx += drawChip(g, tag, cx, tagsY) + 8;
             }
-            y += 34;
-            // boutons d'action (favoris, abonnement, lien Jamendo), avec retour à la ligne si besoin
-            hits.clear();
-            List<String> libelles = new ArrayList<>();
-            List<Boolean> actifs = new ArrayList<>();
-            List<Runnable> actions = new ArrayList<>();
+            // statut (chargement, erreurs) sous les tags, s'il reste de la place à côté de la pochette
+            int statutY = tagsY + 24 + 22;
+            if (statutY <= top + s) {
+                g.setFont(Theme.font(Font.PLAIN, 12.5f));
+                g.setColor(statusError ? new Color(0xFF6B6B) : Theme.MUTED);
+                g.drawString(Theme.fit(g.getFontMetrics(), status, maxW), tx, statutY);
+            }
+
+            // 3. les boutons, sous la pochette et sous le texte
+            int rangeeY = Math.max(top + s, tagsY + 24) + 16;
+            g.setFont(Theme.font(Font.BOLD, 12.5f));
+            for (int i = 0; i < boutons.size(); i++) {
+                Rectangle p = places.get(i);
+                Rectangle r = new Rectangle(ax + p.x, rangeeY + p.y, p.width, p.height);
+                if (r.y + r.height > h + 12) break;          // plus de place au-dessus de l'égaliseur
+                drawButton(g, boutons.get(i), r);
+                hits.add(new Hit(r, boutons.get(i).action(), boutons.get(i).aide()));
+            }
+        }
+
+        /** Les boutons d'action du morceau en cours (favoris et abonnement seulement pour un auditeur). */
+        private List<Bouton> boutons() {
+            List<Bouton> boutons = new ArrayList<>();
             Morceau m = track;
             if (actionsAuditeur != null) {
                 boolean fav = actionsAuditeur.estFavori(m);
-                libelles.add(fav ? "Favori" : "+ Favori");
-                actifs.add(fav);
-                actions.add(() -> actionsAuditeur.basculerFavori(m));
-                boolean artisteFav = actionsAuditeur.estArtisteFavori(m.artiste());
-                libelles.add(artisteFav ? "Artiste favori" : "+ Artiste favori");
-                actifs.add(artisteFav);
-                actions.add(() -> actionsAuditeur.basculerArtisteFavori(m.artiste()));
+                boutons.add(new Bouton(fav ? "Dans tes favoris" : "Ajouter aux favoris", Icone.ETOILE, fav,
+                        fav ? "Retirer ce morceau de « Mes favoris »" : "Ajouter ce morceau à « Mes favoris »",
+                        () -> actionsAuditeur.basculerFavori(m)));
+                boolean aime = actionsAuditeur.estArtisteFavori(m.artiste());
+                boutons.add(new Bouton(aime ? "Artiste aimé" : "Aimer l'artiste", Icone.COEUR, aime,
+                        (aime ? "Retirer " : "Ajouter ") + m.artiste() + (aime ? " de" : " à") + " tes artistes favoris",
+                        () -> actionsAuditeur.basculerArtisteFavori(m.artiste())));
                 boolean abo = actionsAuditeur.estAbonne(m.artiste());
-                libelles.add(abo ? "Abonné" : "S'abonner");
-                actifs.add(abo);
-                actions.add(() -> actionsAuditeur.basculerAbonnement(m.artiste()));
+                boutons.add(new Bouton(abo ? "Abonné·e" : "S'abonner", Icone.CLOCHE, abo,
+                        abo ? "Ne plus suivre " + m.artiste()
+                                : "Suivre " + m.artiste() + " : ses derniers morceaux dans « Mes abonnements »",
+                        () -> actionsAuditeur.basculerAbonnement(m.artiste())));
             }
             if (m.urlJamendo() != null && !m.urlJamendo().isBlank()) {
-                libelles.add("Jamendo");
-                actifs.add(false);
-                actions.add(() -> Theme.openLink(m.urlJamendo()));
+                // bouton rond sans texte (la bulle d'aide l'explique) pour tenir sur la même ligne
+                boutons.add(new Bouton("", Icone.LIEN, false,
+                        "Voir sur Jamendo (ouvre la page du morceau dans ton navigateur)", () -> Theme.openLink(m.urlJamendo())));
             }
-            int bx = tx, rowY = y - 18;
-            g.setFont(Theme.font(Font.BOLD, 12));
-            FontMetrics bfm = g.getFontMetrics();
-            for (int i = 0; i < libelles.size(); i++) {
-                int bw = bfm.stringWidth(libelles.get(i)) + 24;
-                if (bx + bw > tx + maxW && bx > tx) {   // plus de place sur la ligne : on passe à la suivante
-                    bx = tx;
-                    rowY += 34;
-                }
-                if (rowY + 28 > h + 10) break;           // plus de place au-dessus de l'égaliseur
-                Rectangle r = new Rectangle(bx, rowY, bw, 28);
-                drawButton(g, libelles.get(i), r, actifs.get(i));
-                hits.add(new Hit(r, actions.get(i)));
-                bx += bw + 8;
-            }
-            y = rowY + 28;
-            // statut (chargement, erreurs)
-            y += 22;
-            if (y <= h + 8) {
-                g.setFont(Theme.font(Font.PLAIN, 12.5f));
-                g.setColor(statusError ? new Color(0xFF6B6B) : Theme.MUTED);
-                g.drawString(Theme.fit(g.getFontMetrics(), status, maxW), tx, y);
-            }
+            return boutons;
         }
 
         private void paintSpectrum(Graphics2D g, int x, int y, int w, int h) {
@@ -467,22 +496,80 @@ public class ListenPanel extends JPanel implements ListenController.View {
             }
         }
 
-        private void drawButton(Graphics2D g, String text, Rectangle r, boolean actif) {
+        private void drawButton(Graphics2D g, Bouton b, Rectangle r) {
             RoundRectangle2D shape = new RoundRectangle2D.Double(r.x, r.y, r.width, r.height, r.height, r.height);
-            if (actif) {
+            Color fg;
+            if (b.actif()) {
                 Color bg = Mood.mix(glow, Color.WHITE, 0.25);
                 g.setColor(bg);
                 g.fill(shape);
-                g.setColor(Theme.readableOn(bg));
+                fg = Theme.readableOn(bg);
             } else {
                 g.setColor(new Color(255, 255, 255, 18));
                 g.fill(shape);
                 g.setColor(new Color(255, 255, 255, 90));
                 g.draw(shape);
-                g.setColor(Theme.TEXT);
+                fg = Theme.TEXT;
             }
+            g.setColor(fg);
+            if (b.libelle().isEmpty()) {   // icône seule, centrée
+                dessinerIcone(g, b.icone(), r.x + (r.width - 15) / 2.0, r.y + (r.height - 15) / 2.0, 15, b.actif());
+                return;
+            }
+            dessinerIcone(g, b.icone(), r.x + 14, r.y + (r.height - 15) / 2.0, 15, b.actif());
             FontMetrics fm = g.getFontMetrics();
-            g.drawString(text, r.x + 12, r.y + (r.height - fm.getHeight()) / 2 + fm.getAscent());
+            g.drawString(b.libelle(), r.x + 14 + 15 + 8, r.y + (r.height - fm.getHeight()) / 2 + fm.getAscent());
+        }
+
+        /** Petites icônes vectorielles (pas de police d'icônes : rendu identique sur tous les PC). */
+        private static void dessinerIcone(Graphics2D g, Icone icone, double x, double y, double s, boolean plein) {
+            Graphics2D ig = (Graphics2D) g.create();
+            ig.translate(x, y);
+            ig.scale(s / 24.0, s / 24.0); // icônes dessinées dans un carré de 24 x 24
+            ig.setStroke(new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            Path2D p = new Path2D.Double();
+            switch (icone) {
+                case ETOILE -> {
+                    for (int i = 0; i < 10; i++) {
+                        double a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 == 0 ? 11 : 4.8;
+                        double px = 12 + Math.cos(a) * rr, py = 12.8 + Math.sin(a) * rr;
+                        if (i == 0) p.moveTo(px, py); else p.lineTo(px, py);
+                    }
+                    p.closePath();
+                }
+                case COEUR -> {
+                    p.moveTo(12, 21);
+                    p.curveTo(3, 15, 1, 9.5, 3.5, 6);
+                    p.curveTo(6, 2.5, 10.5, 3.2, 12, 7);
+                    p.curveTo(13.5, 3.2, 18, 2.5, 20.5, 6);
+                    p.curveTo(23, 9.5, 21, 15, 12, 21);
+                    p.closePath();
+                }
+                case CLOCHE -> {
+                    p.moveTo(5, 17);
+                    p.lineTo(5, 11);
+                    p.curveTo(5, 6.5, 8, 3.5, 12, 3.5);
+                    p.curveTo(16, 3.5, 19, 6.5, 19, 11);
+                    p.lineTo(19, 17);
+                    p.lineTo(21, 19);
+                    p.lineTo(3, 19);
+                    p.closePath();
+                    ig.draw(new java.awt.geom.Arc2D.Double(9.5, 18.5, 5, 4, 180, 180, java.awt.geom.Arc2D.OPEN));
+                }
+                case LIEN -> {
+                    ig.draw(new RoundRectangle2D.Double(3, 6, 15, 15, 4, 4));
+                    p.moveTo(13, 3);
+                    p.lineTo(21, 3);
+                    p.lineTo(21, 11);
+                    p.moveTo(21, 3);
+                    p.lineTo(11, 13);
+                    ig.draw(p);
+                    ig.dispose();
+                    return;
+                }
+            }
+            if (plein) ig.fill(p); else ig.draw(p);
+            ig.dispose();
         }
 
         private int drawChip(Graphics2D g, String text, int x, int y) {

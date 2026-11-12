@@ -37,6 +37,7 @@ public class HintPasswordField extends JPasswordField {
             g.drawString(hint, getInsets().left, (h - fm.getHeight()) / 2 + fm.getAscent());
         }
         g.dispose();
+        Theme.texteNet(g0);
         super.paintComponent(g0);
     }
 }

@@ -39,6 +39,7 @@ public class HintField extends JTextField {
             g.drawString(hint, in.left, (h - fm.getHeight()) / 2 + fm.getAscent());
         }
         g.dispose();
+        Theme.texteNet(g0);
         super.paintComponent(g0);
     }
 }

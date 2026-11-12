@@ -38,13 +38,24 @@ public final class Theme {
         return Font.SANS_SERIF;
     }
 
+    private static final Map<String, Font> POLICES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Police de l'application, avec le crénage activé : l'espace entre certaines paires de lettres
+     * (« Vo », « Te »…) est ajusté, ce qui évite les lettres qui semblent trop collées ou trop écartées.
+     * Les polices sont mises en cache car elles sont demandées à chaque image.
+     */
     public static Font font(int style, float size) {
-        return new Font(FAMILY, style, 12).deriveFont(size);
+        return POLICES.computeIfAbsent(style + ":" + size, k -> new Font(FAMILY, style, 12).deriveFont(size)
+                .deriveFont(Map.of(java.awt.font.TextAttribute.KERNING, java.awt.font.TextAttribute.KERNING_ON)));
     }
 
     public static void hints(Graphics2D g) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        // positions des lettres au sous-pixel près (sinon chaque lettre est arrondie au pixel entier,
+        // ce qui donne des espacements irréguliers, surtout avec un zoom Windows de 125 % ou 150 %)
+        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
         g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
     }
@@ -60,8 +71,20 @@ public final class Theme {
         return lum > 150 ? new Color(0x111216) : Color.WHITE;
     }
 
+    /** Active le placement des lettres au sous-pixel près avant que Swing dessine un texte. */
+    public static void texteNet(Graphics g) {
+        if (g instanceof Graphics2D g2) {
+            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        }
+    }
+
     public static JLabel label(String text, int style, float size, Color color) {
-        JLabel l = new JLabel(text);
+        JLabel l = new JLabel(text) {
+            @Override protected void paintComponent(Graphics g) {
+                texteNet(g);
+                super.paintComponent(g);
+            }
+        };
         l.setFont(font(style, size));
         l.setForeground(color);
         return l;
@@ -111,6 +134,8 @@ public final class Theme {
         UIManager.put("PopupMenu.borderCornerRadius", 12);
         UIManager.put("MenuItem.selectionBackground", BORDER);
         UIManager.put("MenuItem.selectionArc", 8);
+        // police par défaut des composants standard (listes, menus, boîtes de dialogue), avec crénage
+        UIManager.put("defaultFont", font(Font.PLAIN, 13.5f));
         UIManager.put("ScrollBar.thumbArc", 999);
         UIManager.put("ScrollBar.width", 8);
 
