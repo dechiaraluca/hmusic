@@ -78,7 +78,7 @@ public class Sidebar extends JPanel {
     }
 
     /** Construit le menu à partir de {@code utilisateur.menu()} : appel polymorphe. */
-    private static JPopupMenu menu(Utilisateur utilisateur, Consumer<OptionMenu> onOption) {
+    static JPopupMenu menu(Utilisateur utilisateur, Consumer<OptionMenu> onOption) {
         JPopupMenu popup = new JPopupMenu();
         popup.setBackground(Theme.CARD_HI);
         popup.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.BORDER),

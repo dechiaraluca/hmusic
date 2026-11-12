@@ -153,7 +153,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         applyMood(Mood.NEUTRAL, false);
         showTrack(engine.getTitle(), engine.getProfile());
         feedback.setText("Bienvenue " + utilisateur.identifiant() + " (" + utilisateur.role().toLowerCase(Locale.FRANCE)
-                + ") ! Ton menu est en bas à gauche.");
+                + ") ! Ton menu s'ouvre en cliquant sur ton profil, en haut à droite.");
         journal.dominantSince(LocalDateTime.now().minusDays(7)).ifPresent(s ->
                 feedback.setText("Bienvenue " + utilisateur.identifiant() + " ! Ces derniers jours, ton humeur dominante était : "
                         + s.label().toLowerCase(Locale.FRANCE) + "."));
@@ -306,6 +306,8 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         JPanel switchBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 6));
         switchBox.setOpaque(false);
         switchBox.add(modeSwitch);
+        switchBox.add(Box.createHorizontalStrut(14));
+        switchBox.add(new ProfilBouton(utilisateur, this::choisirOption)); // ouvre le menu de l'utilisateur
 
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
