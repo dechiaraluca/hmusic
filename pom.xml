@@ -28,6 +28,12 @@
             <artifactId>gson</artifactId>
             <version>2.13.2</version>
         </dependency>
+        <!-- Thème moderne pour Swing : listes déroulantes, dialogues, barres de titre sombres -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.7.2</version>
+        </dependency>
         <!-- Tests unitaires -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -61,6 +67,10 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>hmusic.Main</mainClass>
+                                    <manifestEntries>
+                                        <!-- FlatLaf charge une petite bibliothèque native (barre de titre Windows) -->
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                    </manifestEntries>
                                 </transformer>
                             </transformers>
                             <filters>

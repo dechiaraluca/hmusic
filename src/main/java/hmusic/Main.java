@@ -14,8 +14,9 @@ import hmusic.ui.Theme;
 import hmusic.utilisateur.GestionUtilisateurs;
 import hmusic.utilisateur.Utilisateur;
 
-import javax.sound.midi.MidiUnavailableException;
 import javax.swing.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /** Point d'entrée de hmusic. */
 public final class Main {
@@ -24,22 +25,24 @@ public final class Main {
 
     public static void main(String[] args) {
         System.setProperty("awt.useSystemAAFontSettings", "on");
+
+        // Le compositeur charge une banque de sons de 32 Mo : on le prépare en arrière-plan
+        // pendant que l'utilisateur se connecte, au lieu de bloquer l'affichage.
+        CompletableFuture<MoodEngine> moteur = CompletableFuture.supplyAsync(() -> {
+            try {
+                return new MoodEngine();
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        });
+
         SwingUtilities.invokeLater(() -> {
             Theme.install();
-            MoodEngine engine;
-            try {
-                engine = new MoodEngine();
-            } catch (MidiUnavailableException e) {
-                JOptionPane.showMessageDialog(null,
-                        "Impossible d'ouvrir le synthétiseur MIDI de Java :\n" + e.getMessage(),
-                        "hmusic", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
             ListenController listen = new ListenController(new Settings());
             GestionUtilisateurs comptes = GestionUtilisateurs.charger(GestionUtilisateurs.FICHIER);
             Catalogue catalogue = Catalogue.charger(Catalogue.FICHIER);
             Recommandeur recommandeur = choisirRecommandeur();
-            ouvrirSession(engine, listen, comptes, catalogue, recommandeur);
+            ouvrirSession(moteur, listen, comptes, catalogue, recommandeur);
         });
     }
 
@@ -58,17 +61,28 @@ public final class Main {
     }
 
     /** Connexion, puis fenêtre principale. À la déconnexion, on recommence. */
-    private static void ouvrirSession(MoodEngine engine, ListenController listen, GestionUtilisateurs comptes,
-                                      Catalogue catalogue, Recommandeur recommandeur) {
+    private static void ouvrirSession(CompletableFuture<MoodEngine> moteur, ListenController listen,
+                                      GestionUtilisateurs comptes, Catalogue catalogue, Recommandeur recommandeur) {
         Utilisateur u = ConnexionDialog.demander(comptes);
         if (u == null) {             // fenêtre de connexion fermée : on quitte
             listen.shutdown();
-            engine.shutdown();
+            moteur.thenAccept(MoodEngine::shutdown);
             System.exit(0);
             return;
         }
+        MoodEngine engine;
+        try {
+            // en général le moteur est prêt depuis longtemps ; sinon on attend la fin du chargement
+            engine = moteur.join();
+        } catch (CompletionException e) {
+            JOptionPane.showMessageDialog(null,
+                    "Impossible d'ouvrir le synthétiseur MIDI de Java :\n" + e.getCause().getMessage(),
+                    "hmusic", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+            return;
+        }
         new MainWindow(engine, listen, u, comptes, catalogue, recommandeur,
-                () -> SwingUtilities.invokeLater(() -> ouvrirSession(engine, listen, comptes, catalogue, recommandeur)))
+                () -> SwingUtilities.invokeLater(() -> ouvrirSession(moteur, listen, comptes, catalogue, recommandeur)))
                 .setVisible(true);
     }
 }

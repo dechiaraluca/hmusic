@@ -1,6 +1,10 @@
 package hmusic.ui;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+
 import javax.swing.*;
+import java.util.Map;
 import java.awt.*;
 import java.awt.geom.Path2D;
 import java.awt.image.BufferedImage;
@@ -71,7 +75,45 @@ public final class Theme {
         return s + "…";
     }
 
+    /**
+     * Installe le thème FlatLaf sombre aux couleurs de hmusic, AVANT de créer la moindre fenêtre.
+     * FlatLaf modernise les composants Swing standard (listes déroulantes, boîtes de dialogue,
+     * sélecteur de fichiers, menus) et remplace la barre de titre blanche de Windows par une barre sombre.
+     */
     public static void install() {
+        FlatLaf.setGlobalExtraDefaults(Map.of(
+                "@background", "#0F1014",
+                "@foreground", "#F2F3F5",
+                "@accentColor", "#8B6CFF"));
+        FlatDarkLaf.setup();
+
+        // barres de titre des fenêtres
+        UIManager.put("TitlePane.background", BG);
+        UIManager.put("TitlePane.inactiveBackground", BG);
+        UIManager.put("TitlePane.foreground", TEXT);
+        UIManager.put("TitlePane.inactiveForeground", MUTED);
+        // formes arrondies, bordures discrètes
+        UIManager.put("Component.arc", 999);
+        UIManager.put("TextComponent.arc", 999);
+        UIManager.put("Button.arc", 999);
+        UIManager.put("Component.focusWidth", 0);
+        UIManager.put("Component.borderColor", BORDER);
+        UIManager.put("Component.focusedBorderColor", MUTED);
+        // listes déroulantes
+        UIManager.put("ComboBox.buttonStyle", "none");
+        UIManager.put("ComboBox.background", CARD_HI);
+        UIManager.put("ComboBox.popupBackground", CARD_HI);
+        UIManager.put("ComboBox.selectionBackground", BORDER);
+        UIManager.put("ComboBox.padding", new Insets(4, 14, 4, 6));
+        // menus contextuels
+        UIManager.put("PopupMenu.background", CARD_HI);
+        UIManager.put("PopupMenu.borderColor", BORDER);
+        UIManager.put("PopupMenu.borderCornerRadius", 12);
+        UIManager.put("MenuItem.selectionBackground", BORDER);
+        UIManager.put("MenuItem.selectionArc", 8);
+        UIManager.put("ScrollBar.thumbArc", 999);
+        UIManager.put("ScrollBar.width", 8);
+
         UIManager.put("ToolTip.background", CARD_HI);
         UIManager.put("ToolTip.foreground", TEXT);
         UIManager.put("ToolTip.border", BorderFactory.createLineBorder(BORDER));

@@ -108,6 +108,10 @@ public final class AdminDialogs {
                 m -> m.artiste() + " · " + m.genre() + (m.estJouable() ? "" : " · sans audio"),
                 m -> AuditeurDialogs.couleur(m.genre()));
         JComboBox<String> genres = new JComboBox<>();
+        genres.setFont(Theme.font(Font.PLAIN, 14));
+        genres.setForeground(Theme.TEXT);
+        genres.setPreferredSize(new Dimension(190, 42));
+        genres.setMaximumRowCount(16);
         HintField recherche = new HintField("Rechercher (titre, artiste)");
         JLabel compte = Theme.label(" ", Font.PLAIN, 12, Theme.MUTED);
 
