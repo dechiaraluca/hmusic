@@ -113,6 +113,11 @@
   .feature h3 { margin: 0 0 8px; font-size: 18px; }
   .feature p { margin: 0; color: var(--muted); font-size: 15px; }
 
+  .bilan { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 48px; align-items: center; }
+  .bilan .section-lead { margin-bottom: 18px; }
+  .bilan .section-lead b { color: var(--text); }
+  .bilan img { filter: drop-shadow(0 40px 60px color-mix(in srgb, #2EC4B6 30%, transparent)); }
+
   .stack { display: flex; flex-wrap: wrap; gap: 10px; }
   .stack span { padding: 9px 16px; border-radius: 999px; background: var(--card); border: 1px solid var(--border); font-size: 14px; font-weight: 600; }
 
@@ -131,7 +136,7 @@
 
   @media (max-width: 900px) {
     /* minmax(0, 1fr) : la colonne peut rétrécir sous la largeur naturelle de son contenu */
-    .hero .wrap, .modes, .download { grid-template-columns: minmax(0, 1fr); }
+    .hero .wrap, .modes, .download, .bilan { grid-template-columns: minmax(0, 1fr); }
     .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     nav .links { display: none; }
     .download { padding: 28px; }
@@ -153,6 +158,7 @@
     <a class="brand" href="#"><img src="images/logo.png" alt="">hmusic</a>
     <div class="links">
       <a href="#modes">Deux modes</a>
+      <a href="#bilan">Bilan du mois</a>
       <a href="#fonctions">Fonctionnalités</a>
       <a href="#technique">Sous le capot</a>
       <a href="#telecharger">Télécharger</a>
@@ -206,7 +212,7 @@
   <div class="wrap">
     <div class="shot">
       <div class="bar"><i></i><i></i><i></i></div>
-      <img src="images/ecouter.png" alt="Fenêtre principale de hmusic en mode Écouter : pavé d'humeur, file d'attente de morceaux Jamendo" loading="lazy">
+      <img src="images/ecouter.png" alt="Fenêtre principale de hmusic en mode Écouter : pavé d'humeur, catégories d'humeur, morceau Jamendo en cours et file d'attente" loading="lazy">
     </div>
   </div>
 </section>
@@ -222,18 +228,34 @@
         <h3>Une musique qui n'existe nulle part ailleurs</h3>
         <p>Aucun fichier audio : hmusic compose note par note, en temps réel. Ton humeur devient des règles musicales :
           tempo, gamme, accords, instruments, batterie et réverbération. Glisse le curseur, la musique se transforme
-          sous tes oreilles. Chaque morceau reçoit un titre et une pochette inventés, et s'exporte en MIDI.</p>
-        <img src="images/composer.png" alt="Mode Composer : visualiseur et morceau généré" loading="lazy">
+          sous tes oreilles. Chaque morceau reçoit un titre et une pochette inventés, et s'exporte en MIDI.
+          Et tu peux jouer par-dessus avec ton clavier : chaque note tombe juste.</p>
+        <img src="images/composer.png" alt="Mode Composer : pavé d'humeur sur « Euphorique », visualiseur et morceau généré" loading="lazy">
       </article>
       <article class="mode">
         <span class="tag b">Mode Écouter</span>
         <h3>De vrais morceaux, triés sur le volet</h3>
         <p>Écris ce que tu ressens (« crevé mais content ») : une IA compose une playlist à partir d'un catalogue de
           morceaux libres de Jamendo. Chaque proposition est vérifiée : un morceau inventé par l'IA est rejeté.
-          Pochettes, égaliseur en direct, favoris et abonnements aux artistes.</p>
-        <img src="images/lecteur.png" alt="Mode Écouter : morceau en cours et file d'attente" loading="lazy">
+          Ou choisis directement une catégorie d'humeur. Pochettes, égaliseur en direct, favoris, abonnements aux artistes,
+          et des playlists qui apprennent tes goûts.</p>
+        <img src="images/lecteur.png" alt="Mode Écouter : catégories d'humeur, morceau en cours avec égaliseur et file d'attente" loading="lazy">
       </article>
     </div>
+  </div>
+</section>
+
+<section id="bilan">
+  <div class="wrap bilan">
+    <div>
+      <span class="kicker">Nouveau · Bilan du mois</span>
+      <h2>Ce qui t'aide vraiment.</h2>
+      <p class="section-lead">Chaque mois, hmusic résume ton humeur sur une carte à partager : humeur dominante,
+        calendrier coloré jour par jour, temps d'écoute, artistes préférés, goûts appris.</p>
+      <p class="section-lead">Surtout, il compare l'humeur que tu déclares <b>juste avant</b> et <b>juste après</b>
+        chaque station, voyage ou catégorie. Tu sais enfin quelle musique te fait du bien.</p>
+    </div>
+    <img src="images/bilan.png" alt="Carte du bilan du mois : humeur dominante Serein, calendrier des humeurs, ce qui aide vraiment, artistes du mois" loading="lazy">
   </div>
 </section>
 
@@ -272,6 +294,21 @@
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
         <h3>Garde tes créations</h3>
         <p>Toute la musique composée pendant une séance s'exporte en fichier MIDI, à ouvrir dans MuseScore, GarageBand ou FL Studio.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg></div>
+        <h3>Il apprend tes goûts</h3>
+        <p>Favoris, artistes aimés, morceaux écoutés jusqu'au bout ou passés : les playlists font remonter ce qui te plaît, que l'IA soit là ou non.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10v4M10 10v4M14 10v4M18 10v4"/></svg></div>
+        <h3>Clavier musical</h3>
+        <p>En mode Composer, la rangée <code>Q S D F G H J K L M</code> joue des notes toujours dans la gamme du moment, par-dessus la musique. Elles s'ajoutent à l'export MIDI.</p>
+      </div>
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2"/></svg></div>
+        <h3>Bilan du mois</h3>
+        <p>Une carte façon <i>Wrapped</i> : ton humeur jour par jour, tes artistes, et ce qui t'aide vraiment. Exportable en image.</p>
       </div>
     </div>
   </div>
