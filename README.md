@@ -86,6 +86,8 @@ changer de modèle, comme au Projet 3.
 | `Morceau`, `Catalogue` | `catalogue/` | catalogue rangé dans une `Map<genre, List<Morceau>>` (+ index par identifiant) |
 | `ImportJamendo` | `stream/` | remplit le catalogue depuis la bibliothèque Jamendo |
 | `Recommandeur` (interface) | `reco/` | `MockRecommandeur` (sans réseau) et `IaRecommandeur` (IA) |
+| `RecommandeurPersonnalise` | `reco/` | **patron Décorateur** : enveloppe un autre Recommandeur et remonte les morceaux qui plaisent à l'auditeur |
+| `ProfilGouts` | `reco/` | goûts appris (tags, genres, artistes), sauvegardé avec le compte de l'auditeur |
 | `PlaylistIa` | `reco/` | prompt envoyé à l'IA + **contrôle de sa réponse** |
 | `AiClient`, `HttpAiClient`, `AiException` | `ia/` | repris du Projet 3 (ajouts signalés en commentaire) |
 
@@ -93,7 +95,11 @@ changer de modèle, comme au Projet 3.
   (mode Écouter), puis dans *Mes favoris* et *Mes abonnements* (menu).
 - **Admin** : ajouter un morceau à la main, gérer le catalogue (filtrer par genre, rechercher, supprimer),
   importer depuis Jamendo, **lister les utilisateurs inscrits** (le « défi »).
-- Les données sont dans `~/.hmusic/` : `utilisateurs.ser`, `catalogue.ser`, `journal-<identifiant>.csv`.
+- **Le recommandeur apprend** (auditeur) : mettre en favori (+3), aimer l'artiste (+3), écouter jusqu'au bout (+1),
+  passer avant 30 s (−1). Ces signaux pondèrent les tags, le genre et l'artiste ; les playlists et les catégories
+  d'humeur remontent ensuite ce qui plaît. Poids bornés entre −6 et +12.
+- Les données sont dans `~/.hmusic/` : `utilisateurs.ser`, `catalogue.ser`, `journal-<identifiant>.csv`,
+  `ecoutes-<identifiant>.csv` (historique d'écoute pour le bilan).
 
 ### Points de contrôle : où regarder dans le code
 
@@ -104,6 +110,7 @@ changer de modèle, comme au Projet 3.
 | Morceau proposé par l'IA qui n'existe pas ? | `reco/PlaylistIa.controler(...)`, testé dans `RecommandeurTest` |
 | Pourquoi une `Map` pour le catalogue ? | commentaire de `catalogue/Catalogue.java` |
 | Menu différent selon l'utilisateur (polymorphisme) ? | `Utilisateur.menu()` + `optionsSpecifiques()` dans `Auditeur` / `Admin` |
+| Ajouter une fonction sans modifier les recommandeurs ? | `reco/RecommandeurPersonnalise` (Décorateur), testé dans `RecommandeurPersonnaliseTest` |
 
 ## Fonctionnalités
 
@@ -117,7 +124,9 @@ changer de modèle, comme au Projet 3.
 | **Composer : morceaux générés** | 32 mesures, un **titre poétique inventé** et une **pochette générative** unique. Le visualiseur fait naître une particule pour chaque note jouée. |
 | **Composer : export MIDI** | Toute la musique composée pendant la session s'exporte en `.mid` (MuseScore, GarageBand, FL Studio…). |
 | **Écouter : vrais morceaux** | Pochette, artiste, album, tags d'ambiance, lien vers Jamendo, **égaliseur en direct** (analyse FFT du son), file « À suivre » cliquable, avance dans le morceau en cliquant sur la barre de progression. |
-| **Journal d'humeur** | Chaque humeur choisie est enregistrée (`~/.hmusic/journal.csv`), affichée en points sur le pavé et en « ruban de couleurs » dans le journal. |
+| **Journal d'humeur** | Chaque humeur choisie est enregistrée (`~/.hmusic/journal-<identifiant>.csv`), affichée en points sur le pavé et en « ruban de couleurs » dans le journal. |
+| **Bilan du mois** | Menu > *Mon bilan du mois* : une carte façon *Wrapped* (humeur dominante, calendrier coloré jour par jour, temps d'écoute, artistes, musique fétiche, goûts appris), exportable en PNG. Et surtout **« ce qui t'aide vraiment »** : pour chaque station, voyage ou catégorie, hmusic compare l'humeur que tu as déclarée juste avant et juste après (3 h maximum, avant de lancer une autre musique). |
+| **Composer : clavier musical** | La rangée du milieu (`Q S D F G H J K L M` en AZERTY) joue des notes **toujours dans la gamme du moment**, par-dessus la composition, avec l'instrument de la mélodie. Les notes s'enregistrent dans l'export `.mid`. |
 
 ## Comment l'humeur devient de la musique
 
@@ -170,7 +179,7 @@ src/main/java/hmusic/
 │   ├── Spectrum               FFT pour l'égaliseur
 │   └── ListenController       file d'attente selon l'humeur, enchaînement des morceaux
 ├── analysis/MoodAnalyzer      analyse de texte → humeur
-├── data/MoodJournal           persistance CSV du journal
+├── data/                      MoodJournal, HistoriqueEcoute (CSV), Bilan (calcul du bilan du mois)
 ├── config/Settings            réglages (Client ID Jamendo)
 └── ui/                        interface Swing (composants dessinés à la main)
     ├── MainWindow             fenêtre + contrôleur des deux modes
@@ -189,6 +198,9 @@ Points techniques intéressants à présenter :
   `volatile`, et leurs résultats reviennent sur le thread Swing avec `SwingUtilities.invokeLater`.
 - **Patron Observer** (`EngineListener`, `ListenController.View`) : l'interface réagit aux évènements
   sans que les moteurs la connaissent.
+- **Patron Décorateur** (`RecommandeurPersonnalise`) : la personnalisation s'ajoute à n'importe quel Recommandeur.
+- **Communication entre threads sans verrou** : le clavier musical dépose les touches dans une
+  `ConcurrentLinkedQueue` ; seul le thread audio touche au synthétiseur.
 - **Traitement du signal** : décodage MP3 trame par trame, réglage du volume sur les échantillons,
   FFT maison (Cooley-Tukey) regroupée en bandes logarithmiques.
 - **API REST** : requête HTTP, lecture du JSON, gestion des erreurs (clé invalide, réseau coupé).
