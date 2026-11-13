@@ -22,6 +22,17 @@ public record Mood(double valence, double energy) {
         return Math.max(-1.0, Math.min(1.0, x));
     }
 
+    /** Une humeur typique d'un secteur : au milieu de son angle, assez marquée (intensité 0,7). */
+    public static Mood of(Sector s) {
+        for (int i = 0; i < Sector.RING.length; i++) {
+            if (Sector.RING[i] == s) {
+                double a = Math.toRadians(i * 45.0);
+                return new Mood(0.7 * Math.cos(a), 0.7 * Math.sin(a));
+            }
+        }
+        return NEUTRAL;
+    }
+
     /** Distance au centre : 0 = neutre, 1 = émotion très marquée. */
     public double intensity() {
         return Math.min(1.0, Math.hypot(valence, energy));

@@ -7,6 +7,8 @@ import hmusic.utilisateur.Utilisateur;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.Arrays;
 import java.util.List;
 
@@ -29,7 +31,8 @@ public class ConnexionDialog extends JDialog {
     private Utilisateur resultat;
 
     private ConnexionDialog(GestionUtilisateurs comptes) {
-        super((Frame) null, "hmusic — connexion", true);
+        // (Window) null : fenêtre sans propriétaire, elle a donc son propre bouton dans la barre des tâches
+        super((Window) null, "hmusic — connexion", ModalityType.APPLICATION_MODAL);
         this.comptes = comptes;
 
         JPanel box = new JPanel();
@@ -77,6 +80,19 @@ public class ConnexionDialog extends JDialog {
         setSize(460, 520);
         setResizable(false);
         setLocationRelativeTo(null);
+
+        // Windows empêche souvent une nouvelle fenêtre de « voler » le premier plan (lancement depuis un
+        // terminal, un .bat…) : elle s'ouvre alors derrière les autres. Astuce classique : la passer
+        // « toujours au-dessus » le temps de l'ouverture, la ramener devant, puis rendre la main.
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                setAlwaysOnTop(true);
+                toFront();
+                requestFocus();
+                identifiant.requestFocusInWindow();
+                setAlwaysOnTop(false);
+            }
+        });
     }
 
     /**

@@ -67,6 +67,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     private final ModeSwitch modeSwitch;
     private final PlayerBar player;
     private final Sidebar sidebar;
+    private final ProfilBouton profil;
     private final HintField input = new HintField("ex. : un peu fatigué mais content de ma journée");
     private final PillButton composeButton;
     private final JLabel feedback = Theme.label(" ", Font.PLAIN, 13, Theme.MUTED);
@@ -116,10 +117,12 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             }
         });
         player = new PlayerBar(this::togglePlay, this::next, this::exportMidi, this::setVolume, this::seek);
-        sidebar = new Sidebar(utilisateur, this::playStation, this::startJourney, this::choisirOption);
+        sidebar = new Sidebar(this::playStation, this::startJourney);
+        profil = new ProfilBouton(utilisateur, this::choisirOption);
         composeButton = new PillButton("Lancer la musique", true, this::analyzeText);
         modeSwitch = new ModeSwitch(this::setMode);
         listenPanel = new ListenPanel(listen);
+        listenPanel.setOnCategorie(this::jouerCategorie);
         // seul un Auditeur a des favoris et des abonnements : les boutons n'apparaissent que pour lui
         if (utilisateur instanceof Auditeur auditeur) listenPanel.setActionsAuditeur(actionsAuditeur(auditeur));
         input.addActionListener(e -> analyzeText());
@@ -291,7 +294,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     }
 
     private JComponent buildHeader() {
-        JLabel greet = Theme.label(greeting(), Font.PLAIN, 14, Theme.MUTED);
+        JLabel greet = Theme.label(greeting() + " " + utilisateur.identifiant() + ",",Font.PLAIN, 14, Theme.MUTED);
         JLabel question = Theme.label("Comment tu te sens ?", Font.BOLD, 30, Theme.TEXT);
 
         JPanel titles = new JPanel();
@@ -307,7 +310,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         switchBox.setOpaque(false);
         switchBox.add(modeSwitch);
         switchBox.add(Box.createHorizontalStrut(14));
-        switchBox.add(new ProfilBouton(utilisateur, this::choisirOption)); // ouvre le menu de l'utilisateur
+        switchBox.add(profil); // ouvre le menu de l'utilisateur
 
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
@@ -429,6 +432,8 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         pad.setMood(m);
         viz.setMood(m);
         listenPanel.setMood(m);
+        profil.setMood(m);       // l'avatar prend la couleur de l'humeur
+        listenPanel.setCategorieActive(null); // remise en avant par jouerCategorie() si besoin
         Sector s = m.sector();
         Color c = m.color();
         moodName.setText(s.label());
@@ -543,6 +548,28 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
                 }
             }
         }.execute();
+    }
+
+    // ================================================================== catégories d'humeur (mode Écouter)
+
+    /** Joue les morceaux du catalogue rangés dans une catégorie d'humeur. */
+    private void jouerCategorie(Sector s) {
+        List<Morceau> morceaux = MockRecommandeur.categorie(s, catalogue, TAILLE_PLAYLIST);
+        if (morceaux.isEmpty()) {
+            feedback.setText(catalogue.estVide()
+                    ? "Le catalogue est vide : un administrateur doit d'abord l'importer (menu > Importer depuis Jamendo)."
+                    : "Aucun morceau du catalogue ne correspond encore à l'humeur « " + s.label().toLowerCase(Locale.FRANCE) + " ».");
+            return;
+        }
+        stopJourney();
+        sidebar.clearSelection();
+        Mood m = Mood.of(s);
+        applyMood(m, false);
+        logMood(m, "catégorie « " + s.label() + " »");
+        listen.playPlaylist(morceaux, "Catégorie « " + s.label() + " »");
+        listenPanel.setCategorieActive(s);
+        feedback.setText("Catégorie « " + s.label() + " » : " + morceaux.size() + " morceau(x) du catalogue  ·  "
+                + s.description().toLowerCase(Locale.FRANCE) + ".");
     }
 
     private void jouerPlaylist(Playlist p, String humeur, String prefixe) {

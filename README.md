@@ -49,10 +49,15 @@ Sa licence est dans `soundfonts/GeneralUser-GS-LICENSE.txt`.
 
 1. Crée un compte : **le tout premier compte est administrateur** (aucun mot de passe admin n'est écrit
    dans le code). Les comptes suivants sont des auditeurs.
-2. Avec le compte admin, ouvre le menu (en bas à gauche) puis **Importer depuis Jamendo** pour remplir le
-   catalogue (environ 20 morceaux pour chacun de 14 genres). Il faut avoir configuré le Client ID Jamendo.
+2. Avec le compte admin, ouvre le menu (clic sur ton profil, en haut à droite) puis **Importer depuis
+   Jamendo** pour remplir le catalogue (environ 20 morceaux pour chacun de 14 genres). Il faut avoir
+   configuré le Client ID Jamendo.
 3. Crée un compte auditeur, passe en mode **Écouter**, écris ton humeur : le Recommandeur propose une
-   playlist tirée du catalogue.
+   playlist tirée du catalogue. Tu peux aussi cliquer sur une des **8 catégories d'humeur** (Heureux,
+   Tendu, Serein…) : les morceaux du catalogue sont classés par le même score que le `MockRecommandeur`
+   (tags d'ambiance + genre).
+
+L'avatar du profil prend la couleur de l'humeur du moment (anneau orange pour un compte admin).
 
 Tests : `mvnw.cmd test`.
 

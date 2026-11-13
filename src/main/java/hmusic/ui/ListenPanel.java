@@ -1,6 +1,7 @@
 package hmusic.ui;
 
 import hmusic.model.Mood;
+import hmusic.model.Sector;
 import hmusic.stream.ListenController;
 import hmusic.stream.StreamPlayer;
 import hmusic.catalogue.Morceau;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Le mode « Écouter » : vrais morceaux Jamendo choisis selon l'humeur.
@@ -34,6 +36,8 @@ public class ListenPanel extends JPanel implements ListenController.View {
     private final QueueList queueList;
     private final JLabel keyError = Theme.label(" ", Font.PLAIN, 12.5f, new Color(0xFF6B6B));
     private final HintField keyField = new HintField("Colle ton Client ID ici");
+    private Consumer<Sector> onCategorie = s -> {};
+    private final CategoriesHumeur categories = new CategoriesHumeur(s -> onCategorie.accept(s));
 
     public ListenPanel(ListenController controller) {
         this.controller = controller;
@@ -43,6 +47,7 @@ public class ListenPanel extends JPanel implements ListenController.View {
 
         JPanel player = new JPanel(new BorderLayout(0, 10));
         player.setOpaque(false);
+        player.add(categories, BorderLayout.NORTH);
         player.add(nowPlaying, BorderLayout.CENTER);
         player.add(queueList, BorderLayout.SOUTH);
 
@@ -54,6 +59,16 @@ public class ListenPanel extends JPanel implements ListenController.View {
 
     public void setMood(Mood m) {
         nowPlaying.setMood(m);
+    }
+
+    /** Action lancée quand on clique sur une catégorie d'humeur. */
+    public void setOnCategorie(Consumer<Sector> action) {
+        onCategorie = action;
+    }
+
+    /** Met en avant la catégorie en cours d'écoute (null : aucune). */
+    public void setCategorieActive(Sector s) {
+        categories.setActive(s);
     }
 
     /** Ce qu'un auditeur peut faire sur le morceau en cours (favoris, abonnements). */

@@ -42,15 +42,36 @@ public class MockRecommandeur implements Recommandeur {
     public Playlist recommander(String humeur, Catalogue catalogue, int taille) throws RecommandationException {
         if (catalogue.estVide()) throw new RecommandationException("Le catalogue est vide.");
         Mood mood = analyseur.analyze(humeur).map(MoodAnalyzer.Analysis::mood).orElse(Mood.NEUTRAL);
-        Sector sector = mood.sector();
-        Set<String> tagsVoulus = new HashSet<>(Arrays.asList(MoodTags.tags(sector).split("\\+")));
-        Set<String> genresVoulus = GENRES.get(sector);
+        return new Playlist(humeur, meilleursPour(mood.sector(), catalogue, taille), List.of(), nom());
+    }
 
+    /**
+     * Les morceaux du catalogue qui correspondent le mieux à une famille d'émotion.
+     * Sert aussi aux « catégories d'humeur » du mode Écouter : seuls les morceaux qui
+     * correspondent au moins un peu (score > 0) et qu'on peut écouter sont gardés.
+     */
+    public static List<Morceau> categorie(Sector sector, Catalogue catalogue, int taille) {
+        Set<String> tagsVoulus = tagsVoulus(sector);
+        Set<String> genresVoulus = GENRES.get(sector);
+        return catalogue.tous().stream()
+                .filter(m -> m.estJouable() && score(m, tagsVoulus, genresVoulus) > 0)
+                .sorted(Comparator.comparingInt((Morceau m) -> score(m, tagsVoulus, genresVoulus)).reversed()
+                        .thenComparing(Morceau::id))
+                .limit(taille)
+                .toList();
+    }
+
+    private static List<Morceau> meilleursPour(Sector sector, Catalogue catalogue, int taille) {
+        Set<String> tagsVoulus = tagsVoulus(sector);
+        Set<String> genresVoulus = GENRES.get(sector);
         List<Morceau> tries = new ArrayList<>(catalogue.tous());
         tries.sort(Comparator.comparingInt((Morceau m) -> score(m, tagsVoulus, genresVoulus)).reversed()
                 .thenComparing(Morceau::id)); // départage stable : résultat toujours identique
-        List<Morceau> choix = tries.subList(0, Math.min(taille, tries.size()));
-        return new Playlist(humeur, choix, List.of(), nom());
+        return List.copyOf(tries.subList(0, Math.min(taille, tries.size())));
+    }
+
+    private static Set<String> tagsVoulus(Sector sector) {
+        return new HashSet<>(Arrays.asList(MoodTags.tags(sector).split("\\+")));
     }
 
     static int score(Morceau m, Set<String> tagsVoulus, Set<String> genresVoulus) {

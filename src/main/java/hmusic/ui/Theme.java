@@ -84,6 +84,29 @@ public final class Theme {
                 texteNet(g);
                 super.paintComponent(g);
             }
+
+            // Le texte est dessiné avec des métriques fractionnaires (texteNet), un peu plus larges que
+            // les métriques entières utilisées par Swing pour la taille : on mesure donc comme au dessin,
+            // sinon la fin du texte (ex. le « ? » d'un grand titre) est coupée.
+            @Override public Dimension getPreferredSize() {
+                Dimension d = super.getPreferredSize();
+                String t = getText();
+                if (t != null && !t.isEmpty() && !t.startsWith("<html") && getIcon() == null && getFont() != null) {
+                    java.awt.font.FontRenderContext frc = new java.awt.font.FontRenderContext(null, true, true);
+                    int w = (int) Math.ceil(getFont().getStringBounds(t, frc).getWidth());
+                    Insets in = getInsets();
+                    d.width = Math.max(d.width, w + in.left + in.right + 2);
+                }
+                return d;
+            }
+
+            // BoxLayout utilise la taille MAXIMALE pour la largeur ; celle du JLabel vient de son UI
+            // (mesure arrondie) : on l'aligne sur la taille préférée corrigée ci-dessus.
+            @Override public Dimension getMaximumSize() {
+                Dimension m = super.getMaximumSize();
+                if (isMaximumSizeSet()) return m;
+                return new Dimension(Math.max(m.width, getPreferredSize().width), m.height);
+            }
         };
         l.setFont(font(style, size));
         l.setForeground(color);
