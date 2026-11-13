@@ -15,6 +15,7 @@ public enum OptionMenu {
     LISTER_UTILISATEURS("Utilisateurs inscrits"),
     // Communes à tous
     JOURNAL("Mon journal d'humeur"),
+    BILAN("Mon bilan du mois"),
     DECONNEXION("Se déconnecter");
 
     private final String libelle;
