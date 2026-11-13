@@ -45,6 +45,9 @@ public class Visualizer extends JComponent implements EngineListener {
     private String subtitle = "Choisis une humeur sur le pavé, une station, ou décris ce que tu ressens.";
     private boolean playing;
     private double kick, time;
+    /** Touches du clavier musical enfoncées (dessinées allumées). */
+    private final boolean[] touches = new boolean[ClavierMusical.NB_TOUCHES];
+    private final String[] etiquettes = ClavierMusical.etiquettes();
 
     public Visualizer() {
         setOpaque(false);
@@ -83,6 +86,12 @@ public class Visualizer extends JComponent implements EngineListener {
 
     public void setPlaying(boolean p) {
         playing = p;
+        repaint();
+    }
+
+    /** Allume / éteint une touche du petit clavier dessiné. */
+    public void setTouche(int degre, boolean enfoncee) {
+        if (degre >= 0 && degre < touches.length) touches[degre] = enfoncee;
         repaint();
     }
 
@@ -128,6 +137,14 @@ public class Visualizer extends JComponent implements EngineListener {
             case MoodEngine.CH_BASS -> add(w / 2.0, h * 0.45, 0, 0, 30, 3.2 + vel / 50.0, 0.018, 2, color);
             case MoodEngine.CH_ARP -> add(px, h * 0.65 + (rnd.nextDouble() - 0.5) * 40, (rnd.nextDouble() - 0.5) * 0.8,
                     -0.6 - rnd.nextDouble(), 2.2, 0, 0.016, 3, Mood.mix(color, Color.WHITE, 0.7));
+            case MoodEngine.CH_SOLO -> {   // note jouée au clavier : grosse bulle lumineuse + onde
+                add(px, h * 0.85, 0, -2.2, 9 + vel / 16.0, 0, 0.006, 0, Mood.mix(color, Color.WHITE, 0.75));
+                add(px, h * 0.85, 0, -2.2, 12, 2.4, 0.02, 2, Color.WHITE);
+                for (int i = 0; i < 6; i++) {
+                    double a = rnd.nextDouble() * Math.PI * 2, sp = 1 + rnd.nextDouble() * 2;
+                    add(px, h * 0.85, Math.cos(a) * sp, Math.sin(a) * sp - 1, 2.5, 0, 0.025, 3, Mood.mix(color, Color.WHITE, 0.6));
+                }
+            }
             default -> { }
         }
     }
@@ -220,6 +237,7 @@ public class Visualizer extends JComponent implements EngineListener {
                 "ambiance " + profile.instruments().label()}) {
             cx += drawChip(g, chip, cx, 22) + 8;
         }
+        paintClavier(g, 22, 58);
         g.setFont(Theme.font(Font.BOLD, 11));
         String state = playing ? "EN LECTURE" : "EN PAUSE";
         int sw = g.getFontMetrics().stringWidth(state);
@@ -242,6 +260,28 @@ public class Visualizer extends JComponent implements EngineListener {
         g.setStroke(new BasicStroke(1f));
         g.draw(card);
         g.dispose();
+    }
+
+    /** Petit clavier : rappelle quelles touches jouent, et s'allume quand on joue. */
+    private void paintClavier(Graphics2D g, int x, int y) {
+        final int s = 22, gap = 4;
+        g.setFont(Theme.font(Font.BOLD, 10.5f));
+        FontMetrics fm = g.getFontMetrics();
+        for (int i = 0; i < etiquettes.length; i++) {
+            RoundRectangle2D r = new RoundRectangle2D.Double(x + i * (s + gap), y, s, s, 7, 7);
+            boolean on = touches[i];
+            g.setColor(on ? Mood.mix(color, Color.WHITE, 0.4) : new Color(0, 0, 0, 80));
+            g.fill(r);
+            g.setColor(on ? Color.WHITE : new Color(255, 255, 255, 40));
+            g.draw(r);
+            g.setColor(on ? Theme.readableOn(Mood.mix(color, Color.WHITE, 0.4)) : Theme.MUTED);
+            String t = etiquettes[i];
+            g.drawString(t, (float) (r.getX() + (s - fm.stringWidth(t)) / 2.0), y + (s - fm.getHeight()) / 2f + fm.getAscent());
+        }
+        g.setFont(Theme.font(Font.PLAIN, 11.5f));
+        g.setColor(Theme.MUTED);
+        g.drawString("joue avec ton clavier, toujours dans la gamme", x + etiquettes.length * (s + gap) + 6,
+                y + (s - g.getFontMetrics().getHeight()) / 2f + g.getFontMetrics().getAscent());
     }
 
     private int drawChip(Graphics2D g, String text, int x, int y) {

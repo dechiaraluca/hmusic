@@ -9,6 +9,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.locks.LockSupport;
 
@@ -26,10 +27,15 @@ import java.util.concurrent.locks.LockSupport;
  */
 public class MoodEngine {
 
-    public static final int CH_MELODY = 0, CH_PAD = 1, CH_BASS = 2, CH_ARP = 3, CH_DRUMS = 9;
+    public static final int CH_MELODY = 0, CH_PAD = 1, CH_BASS = 2, CH_ARP = 3, CH_SOLO = 4, CH_DRUMS = 9;
     public static final int BARS_PER_TRACK = 32;
+    /** Durée maximale d'une note jouée au clavier (si le relâchement de la touche se perd). */
+    private static final long SOLO_MAX_NANOS = 4_000_000_000L;
 
-    private static final int[] USED_CHANNELS = {CH_MELODY, CH_PAD, CH_BASS, CH_ARP, CH_DRUMS};
+    private static final int[] USED_CHANNELS = {CH_MELODY, CH_PAD, CH_BASS, CH_ARP, CH_SOLO, CH_DRUMS};
+
+    /** Une touche du clavier musical appuyée ou relâchée (envoyée par l'interface au thread audio). */
+    private record ToucheJoueur(int degre, boolean appui) {}
     private static final int REST = Integer.MIN_VALUE;
     private static final int[] KEYS = {0, 2, 3, 5, 7, 8, 9, 10}; // Do, Ré, Mib, Fa, Sol, Lab, La, Sib
     private static final long DRUM_NANOS = 150_000_000L;
@@ -45,6 +51,14 @@ public class MoodEngine {
     private final Object lock = new Object();
     private final Random rnd = new Random();
     private final Thread thread;
+    /**
+     * Touches jouées par l'utilisateur. L'interface (thread Swing) les dépose ici, le thread audio
+     * les joue : c'est le seul thread qui touche au synthétiseur, donc pas de conflit.
+     * {@code ConcurrentLinkedQueue} : une file utilisable par deux threads à la fois, sans verrou.
+     */
+    private final Queue<ToucheJoueur> touchesJoueur = new ConcurrentLinkedQueue<>();
+    /** Degré de la gamme → note MIDI en train de sonner (thread audio uniquement). */
+    private final Map<Integer, Integer> notesTenues = new HashMap<>();
 
     // --- état partagé avec l'interface (volatile) ---
     private volatile Mood mood = Mood.NEUTRAL;
@@ -129,6 +143,21 @@ public class MoodEngine {
         if (playing) pause(); else play();
     }
 
+    /**
+     * Clavier musical : l'utilisateur appuie sur une touche qui correspond à un degré de la gamme
+     * (0 = tonique). La note est calculée dans la gamme <b>du moment</b> : on ne peut pas jouer faux,
+     * et la même touche sonne majeur, mineur, lydien… selon l'humeur.
+     */
+    public void appuyerDegre(int degre) {
+        touchesJoueur.add(new ToucheJoueur(degre, true));
+        LockSupport.unpark(thread); // réveille le thread audio pour jouer la note tout de suite
+    }
+
+    public void relacherDegre(int degre) {
+        touchesJoueur.add(new ToucheJoueur(degre, false));
+        LockSupport.unpark(thread);
+    }
+
     /** Volume général de 0 à 100. */
     public void setVolume(int v) {
         volume = Math.max(0, Math.min(100, v));
@@ -163,6 +192,8 @@ public class MoodEngine {
         while (running) {
             if (!playing) {
                 silence();
+                touchesJoueur.clear();
+                notesTenues.clear();
                 synchronized (lock) {
                     while (!playing && running) {
                         try {
@@ -178,6 +209,7 @@ public class MoodEngine {
             }
             long now = System.nanoTime();
             flushOffs(now);
+            jouerTouches();
             if (now >= next) {
                 try {
                     next += tick();
@@ -252,7 +284,7 @@ public class MoodEngine {
         chordDegree = progression[bar % progression.length];
 
         int reverb = p.reverb();
-        for (int c : new int[]{CH_MELODY, CH_PAD, CH_BASS, CH_ARP}) control(c, 91, reverb);
+        for (int c : new int[]{CH_MELODY, CH_PAD, CH_BASS, CH_ARP, CH_SOLO}) control(c, 91, reverb);
         control(CH_DRUMS, 91, reverb / 2);
 
         long barNanos = 16 * (60_000_000_000L / p.bpm() / 4);
@@ -276,6 +308,24 @@ public class MoodEngine {
         profile = p;
         final String t = title;
         for (EngineListener l : listeners) l.onTrackChanged(t, p);
+    }
+
+    /** Joue (ou relâche) les touches déposées par l'interface. Thread audio uniquement. */
+    private void jouerTouches() {
+        ToucheJoueur t;
+        while ((t = touchesJoueur.poll()) != null) {
+            if (t.appui()) {
+                if (notesTenues.containsKey(t.degre())) continue;     // répétition automatique du clavier
+                int pitch = scale.pitch(tonic() + 12, t.degre());     // même registre que la mélodie
+                noteOn(CH_SOLO, pitch, profile.baseVelocity() + 18, SOLO_MAX_NANOS);
+                notesTenues.put(t.degre(), pitch);
+            } else {
+                Integer pitch = notesTenues.remove(t.degre());
+                if (pitch == null) continue;
+                offs.removeIf(o -> o.channel() == CH_SOLO && o.pitch() == pitch);
+                noteOff(CH_SOLO, pitch);
+            }
+        }
     }
 
     // =====================================================================
@@ -482,6 +532,7 @@ public class MoodEngine {
         program(CH_PAD, in.pad());
         program(CH_BASS, in.bass());
         program(CH_ARP, in.arp());
+        program(CH_SOLO, in.melody()); // le clavier joue avec l'instrument de la mélodie
         control(CH_PAD, 93, 50); // un peu de chorus sur la nappe
         applyVolume();
     }
@@ -497,6 +548,7 @@ public class MoodEngine {
         mix[CH_PAD] = 72;
         mix[CH_BASS] = 100;
         mix[CH_ARP] = 70;
+        mix[CH_SOLO] = 118;
         mix[CH_DRUMS] = 100;
         for (int c : USED_CHANNELS) control(c, 7, mix[c] * volume / 100);
     }
