@@ -2,12 +2,15 @@ package hmusic.ui;
 
 import hmusic.analysis.MoodAnalyzer;
 import hmusic.catalogue.Catalogue;
+import hmusic.data.HistoriqueEcoute;
 import hmusic.data.MoodJournal;
 import hmusic.data.Stockage;
 import hmusic.reco.MockRecommandeur;
 import hmusic.reco.Playlist;
+import hmusic.reco.ProfilGouts;
 import hmusic.reco.RecommandationException;
 import hmusic.reco.Recommandeur;
+import hmusic.reco.RecommandeurPersonnalise;
 import hmusic.stream.ImportJamendo;
 import hmusic.stream.JamendoClient;
 import hmusic.utilisateur.Auditeur;
@@ -29,15 +32,18 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Fenêtre principale : assemble les composants et fait le lien (contrôleur) entre
@@ -57,6 +63,10 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     private final MoodEngine engine;
     private final ListenController listen;
     private final MoodJournal journal;
+    private final HistoriqueEcoute historique;
+    /** Touches du clavier musical actuellement enfoncées (pour ignorer la répétition automatique). */
+    private final Set<Integer> touchesTenues = new HashSet<>();
+    private final KeyEventDispatcher clavier = this::toucheClavier;
     private final MoodAnalyzer analyzer = new MoodAnalyzer();
 
     private final MoodPad pad;
@@ -106,6 +116,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         this.surDeconnexion = surDeconnexion;
         // un journal d'humeur par utilisateur
         this.journal = new MoodJournal(Stockage.DOSSIER.resolve("journal-" + utilisateur.identifiant().toLowerCase(Locale.ROOT) + ".csv"));
+        this.historique = new HistoriqueEcoute(Stockage.DOSSIER.resolve("ecoutes-" + utilisateur.identifiant().toLowerCase(Locale.ROOT) + ".csv"));
 
         pad = new MoodPad(new MoodPad.Listener() {
             @Override public void moodPicked(Mood m, boolean adjusting) { onPadPick(m, adjusting); }
@@ -141,12 +152,30 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         setIconImages(List.of(Theme.appIcon(16), Theme.appIcon(32), Theme.appIcon(64)));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
+            @Override public void windowOpened(WindowEvent e) {
+                viz.requestFocusInWindow(); // le clavier musical marche tout de suite
+            }
+
+            @Override public void windowDeactivated(WindowEvent e) {
+                relacherTouches();          // une touche ne doit pas rester « coincée » si on change de fenêtre
+            }
+
             @Override public void windowClosing(WindowEvent e) {
+                KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(clavier);
                 comptes.sauvegarder();
                 listen.shutdown();
                 engine.shutdown();
             }
         });
+        // clavier musical : on écoute toutes les touches de la fenêtre (voir toucheClavier)
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(clavier);
+        // un clic sur le pavé ou le visualiseur quitte le champ de texte : le clavier rejoue de la musique
+        viz.setFocusable(true);
+        java.awt.event.MouseAdapter reprendreClavier = new java.awt.event.MouseAdapter() {
+            @Override public void mousePressed(java.awt.event.MouseEvent e) { viz.requestFocusInWindow(); }
+        };
+        viz.addMouseListener(reprendreClavier);
+        pad.addMouseListener(reprendreClavier);
         setMinimumSize(new Dimension(1120, 720));
         setSize(1320, 820);
         setLocationRelativeTo(null);
@@ -176,6 +205,8 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             case IMPORTER_CATALOGUE -> importerCatalogue();
             case LISTER_UTILISATEURS -> AdminDialogs.listerUtilisateurs(this, comptes.utilisateurs());
             case JOURNAL -> openJournal();
+            case BILAN -> BilanDialog.ouvrir(this, journal, historique,
+                    utilisateur instanceof Auditeur a ? a.gouts() : null);
             case DECONNEXION -> deconnecter();
         }
     }
@@ -262,7 +293,10 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
 
     private void deconnecter() {
         stopJourney();
+        relacherTouches();
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(clavier);
         engine.pause();
+        listen.terminerSession();      // le morceau en cours compte encore pour CET utilisateur
         listen.setActive(false, false);
         engine.removeListener(this);
         engine.removeListener(viz);
@@ -389,6 +423,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         stageCards.show(stage, m.name());
         player.setListenMode(listening());
         if (listening()) {
+            relacherTouches();
             engine.pause();
             refreshListenBar();
             listen.setActive(true, wasPlaying);
@@ -502,6 +537,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         }
         feedback.setText("J'ai compris : " + a.mood().sector().label().toLowerCase(Locale.FRANCE)
                 + "   (mots repérés : " + String.join(", ", a.words()) + ")");
+        viz.requestFocusInWindow(); // on quitte le champ de texte : le clavier musical est de nouveau actif
     }
 
     // ================================================================== playlist du Recommandeur
@@ -523,10 +559,11 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
         // copie du catalogue : le calcul se fait en arrière-plan pendant que l'interface reste utilisable
         Catalogue copie = new Catalogue();
         catalogue.tous().forEach(copie::ajouter);
+        Recommandeur reco = personnaliser(recommandeur);
 
         new SwingWorker<Playlist, Void>() {
             @Override protected Playlist doInBackground() throws Exception {
-                return recommandeur.recommander(humeur, copie, TAILLE_PLAYLIST);
+                return reco.recommander(humeur, copie, TAILLE_PLAYLIST);
             }
 
             @Override protected void done() {
@@ -540,7 +577,7 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
                     }
                     // solution de secours : l'IA a échoué, le recommandeur hors ligne prend le relais
                     try {
-                        jouerPlaylist(new MockRecommandeur().recommander(humeur, copie, TAILLE_PLAYLIST), humeur,
+                        jouerPlaylist(personnaliser(new MockRecommandeur()).recommander(humeur, copie, TAILLE_PLAYLIST), humeur,
                                 cause.getMessage() + " → ");
                     } catch (RecommandationException e2) {
                         feedback.setText("Pas de playlist : " + e2.getMessage());
@@ -552,9 +589,19 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
 
     // ================================================================== catégories d'humeur (mode Écouter)
 
+    /**
+     * Pour un auditeur, on enveloppe le recommandeur dans un {@link RecommandeurPersonnalise}
+     * (patron Décorateur) qui tient compte de ses goûts appris. Un Admin garde le recommandeur de base.
+     */
+    private Recommandeur personnaliser(Recommandeur base) {
+        return utilisateur instanceof Auditeur a ? new RecommandeurPersonnalise(base, a.gouts()) : base;
+    }
+
     /** Joue les morceaux du catalogue rangés dans une catégorie d'humeur. */
     private void jouerCategorie(Sector s) {
-        List<Morceau> morceaux = MockRecommandeur.categorie(s, catalogue, TAILLE_PLAYLIST);
+        List<Morceau> morceaux = MockRecommandeur.categorie(s, catalogue, TAILLE_PLAYLIST * 2);
+        if (utilisateur instanceof Auditeur a) morceaux = RecommandeurPersonnalise.reordonner(morceaux, a.gouts());
+        morceaux = morceaux.subList(0, Math.min(TAILLE_PLAYLIST, morceaux.size()));
         if (morceaux.isEmpty()) {
             feedback.setText(catalogue.estVide()
                     ? "Le catalogue est vide : un administrateur doit d'abord l'importer (menu > Importer depuis Jamendo)."
@@ -627,7 +674,9 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
             applyMood(done.to(), false);
             logMood(done.to(), "fin du voyage « " + done.name() + " »");
             stopJourney();
-            feedback.setText("Destination atteinte : " + done.to().sector().label().toLowerCase(Locale.FRANCE) + ".");
+            // on invite l'utilisateur à dire comment il se sent : c'est ce qui alimente « ce qui t'aide vraiment »
+            feedback.setText("Destination atteinte : " + done.to().sector().label().toLowerCase(Locale.FRANCE)
+                    + ". Et toi, comment tu te sens maintenant ? Clique sur le pavé : hmusic saura si ce voyage t'aide.");
             return;
         }
         // principe d'iso-modulation : on reste d'abord sur l'humeur de départ (15 % du temps), puis on glisse
@@ -761,6 +810,61 @@ public class MainWindow extends JFrame implements EngineListener, ListenControll
     @Override
     public void showPlaying(boolean playing) {
         if (listening()) player.setPlaying(playing);
+    }
+
+    /**
+     * Un morceau vient d'être quitté : on l'ajoute à l'historique (pour le bilan) et, pour un auditeur,
+     * on en tire un signal pour ses goûts : écouté jusqu'au bout = aimé, passé avant 30 s = pas aimé.
+     */
+    @Override
+    public void morceauQuitte(Morceau m, double secondes, boolean fini) {
+        historique.ajouter(m, secondes);
+        if (!(utilisateur instanceof Auditeur a)) return;
+        if (fini) a.gouts().signaler(m, ProfilGouts.ECOUTE_COMPLETE);
+        else if (secondes < HistoriqueEcoute.SECONDES_MIN) a.gouts().signaler(m, ProfilGouts.PASSE);
+        else return;
+        comptes.sauvegarder();
+    }
+
+    // ================================================================== clavier musical (mode Composer)
+
+    /**
+     * Reçoit TOUTES les touches de l'application avant les composants. On ne garde que celles du
+     * clavier musical, en mode Composer, quand on n'est pas en train d'écrire dans un champ de texte.
+     *
+     * @return true si la touche a été utilisée (elle n'ira pas plus loin)
+     */
+    private boolean toucheClavier(KeyEvent e) {
+        if (listening() || !isActive()) return false;     // autre mode, ou une autre fenêtre est au premier plan
+        Component focus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (focus instanceof javax.swing.text.JTextComponent) return false; // on écrit : les lettres restent des lettres
+        if (e.isControlDown() || e.isAltDown() || e.isMetaDown()) return false;
+        int degre = ClavierMusical.degre(e.getKeyCode());
+        if (degre < 0) return false;
+        if (e.getID() == KeyEvent.KEY_PRESSED) {
+            if (touchesTenues.add(degre)) {               // false = répétition automatique : déjà jouée
+                if (!engine.isPlaying()) engine.play();
+                engine.appuyerDegre(degre);
+                viz.setTouche(degre, true);
+            }
+            return true;
+        }
+        if (e.getID() == KeyEvent.KEY_RELEASED) {
+            if (touchesTenues.remove(degre)) {
+                engine.relacherDegre(degre);
+                viz.setTouche(degre, false);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void relacherTouches() {
+        for (int degre : touchesTenues) {
+            engine.relacherDegre(degre);
+            viz.setTouche(degre, false);
+        }
+        touchesTenues.clear();
     }
 
     private static String formatTime(double seconds) {

@@ -41,6 +41,14 @@ public class ListenController implements StreamPlayer.Listener {
         default void showSpectrum(float[] bands) {}
 
         default void showPlaying(boolean playing) {}
+
+        /**
+         * On quitte un morceau (morceau suivant, fin du morceau, déconnexion).
+         *
+         * @param secondes combien de secondes ont été écoutées
+         * @param fini     true si le morceau est allé jusqu'au bout
+         */
+        default void morceauQuitte(Morceau track, double secondes, boolean fini) {}
     }
 
     private static final int PAGE = 30;
@@ -72,6 +80,8 @@ public class ListenController implements StreamPlayer.Listener {
     private boolean playRequested;    // l'utilisateur veut entendre quelque chose
     private boolean active;           // le mode Écouter est-il affiché ?
     private Morceau current;
+    private double currentSeconds;    // position atteinte dans le morceau en cours
+    private boolean currentFinished;  // le morceau en cours est allé jusqu'au bout
     private int consecutiveErrors;
     /** Nom de la playlist en cours (playlist IA, artiste…), ou null en mode « radio d'humeur ». */
     private String playlist;
@@ -288,6 +298,27 @@ public class ListenController implements StreamPlayer.Listener {
         io.shutdownNow();
     }
 
+    /**
+     * Fin de session (déconnexion) : le morceau en cours est compté comme « quitté », puis oublié,
+     * pour que la session suivante (un autre utilisateur) ne reçoive pas l'historique de celle-ci.
+     */
+    public void terminerSession() {
+        pause();
+        quitterMorceauEnCours();
+        current = null;
+        playlist = null;
+        queue.clear();
+        publishQueue();
+    }
+
+    private void quitterMorceauEnCours() {
+        if (current == null) return;
+        Morceau t = current;
+        double s = currentSeconds;
+        boolean fini = currentFinished;
+        views.forEach(v -> v.morceauQuitte(t, s, fini));
+    }
+
     // ================================================================== logique interne
 
     private boolean ensureKey() {
@@ -314,7 +345,10 @@ public class ListenController implements StreamPlayer.Listener {
     }
 
     private void start(Morceau t) {
+        quitterMorceauEnCours();
         current = t;
+        currentSeconds = 0;
+        currentFinished = false;
         played.add(t.id());
         player.play(t);
         views.forEach(v -> v.showNowPlaying(t));
@@ -423,7 +457,9 @@ public class ListenController implements StreamPlayer.Listener {
     @Override
     public void onProgress(Morceau track, double seconds) {
         SwingUtilities.invokeLater(() -> {
-            if (track == current) views.forEach(v -> v.showProgress(track, seconds));
+            if (track != current) return;
+            currentSeconds = seconds;
+            views.forEach(v -> v.showProgress(track, seconds));
         });
     }
 
@@ -435,7 +471,9 @@ public class ListenController implements StreamPlayer.Listener {
     @Override
     public void onFinished(Morceau track) {
         SwingUtilities.invokeLater(() -> {
-            if (track == current && playRequested) playNext();
+            if (track != current) return;
+            currentFinished = true;
+            if (playRequested) playNext();
         });
     }
 

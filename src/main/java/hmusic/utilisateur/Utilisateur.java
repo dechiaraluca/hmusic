@@ -61,6 +61,7 @@ public abstract class Utilisateur implements Serializable {
     public final List<OptionMenu> menu() {
         List<OptionMenu> options = new ArrayList<>(optionsSpecifiques());
         options.add(OptionMenu.JOURNAL);
+        options.add(OptionMenu.BILAN);
         options.add(OptionMenu.DECONNEXION);
         return options;
     }
