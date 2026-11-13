@@ -53,12 +53,16 @@ public class MoodJournal {
         }
     }
 
-    /** Ajoute une entrée (fusionnée avec la précédente si elle date de moins de 20 s). */
+    /**
+     * Ajoute une entrée. Elle remplace la précédente si celle-ci a la même origine et date de moins
+     * de 20 s (plusieurs clics d'affilée sur le pavé = une seule humeur). Deux origines différentes
+     * (ex. : clic sur le pavé puis station) sont toutes les deux gardées : le bilan en a besoin.
+     */
     public synchronized void add(Mood mood, String source) {
         Entry e = new Entry(LocalDateTime.now().withNano(0), mood, clean(source));
         if (!entries.isEmpty()) {
             Entry last = entries.get(entries.size() - 1);
-            if (Duration.between(last.time(), e.time()).compareTo(MERGE_WINDOW) < 0) {
+            if (last.source().equals(e.source()) && Duration.between(last.time(), e.time()).compareTo(MERGE_WINDOW) < 0) {
                 entries.remove(entries.size() - 1);
             }
         }
