@@ -88,13 +88,14 @@ class GestionUtilisateursTest {
         g.inscrire("prof", "secret123", "secret123");
         Auditeur lea = (Auditeur) g.inscrire("lea", "motdepasse", "motdepasse");
         lea.basculerAbonnement("Mira");
-        lea.basculerArtisteFavori("Hoshi");
+        lea.basculerArtisteFavori("Hoshi");   // apprend aussi un goût pour Hoshi
         g.sauvegarder();
 
         GestionUtilisateurs relu = nouvelle(); // relit le fichier sérialisé
         Auditeur leaRelue = (Auditeur) relu.connecter("lea", "motdepasse");
         assertTrue(leaRelue.estAbonne("Mira"));
         assertTrue(leaRelue.estArtisteFavori("Hoshi"));
+        assertFalse(leaRelue.gouts().estVide(), "les goûts appris sont sauvegardés avec le compte");
         assertInstanceOf(Admin.class, relu.connecter("prof", "secret123"));
     }
 }
