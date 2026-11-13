@@ -1,6 +1,7 @@
 package hmusic.utilisateur;
 
 import hmusic.catalogue.Morceau;
+import hmusic.reco.ProfilGouts;
 
 import java.io.Serial;
 import java.util.*;
@@ -21,9 +22,20 @@ public class Auditeur extends Utilisateur {
     private final Map<String, Morceau> morceauxFavoris = new LinkedHashMap<>();
     private final Set<String> artistesFavoris = new LinkedHashSet<>();
     private final Set<String> abonnements = new LinkedHashSet<>();
+    /**
+     * Goûts appris (voir {@link ProfilGouts}). Pas {@code final} : un compte sauvegardé avant l'ajout
+     * de ce champ est relu avec {@code null} ici (la désérialisation n'exécute pas l'initialisation
+     * des champs), d'où la création « à la demande » dans {@link #gouts()}.
+     */
+    private ProfilGouts gouts = new ProfilGouts();
 
     public Auditeur(String identifiant, String motDePasse) {
         super(identifiant, motDePasse);
+    }
+
+    public ProfilGouts gouts() {
+        if (gouts == null) gouts = new ProfilGouts();
+        return gouts;
     }
 
     @Override
@@ -44,8 +56,12 @@ public class Auditeur extends Utilisateur {
 
     /** Ajoute ou retire le morceau des favoris. @return true s'il est maintenant en favori */
     public boolean basculerFavori(Morceau m) {
-        if (morceauxFavoris.remove(m.id()) != null) return false;
+        if (morceauxFavoris.remove(m.id()) != null) {
+            gouts().signaler(m, -ProfilGouts.FAVORI);   // on annule ce que l'ajout avait appris
+            return false;
+        }
         morceauxFavoris.put(m.id(), m);
+        gouts().signaler(m, ProfilGouts.FAVORI);
         return true;
     }
 
@@ -64,8 +80,12 @@ public class Auditeur extends Utilisateur {
     }
 
     public boolean basculerArtisteFavori(String artiste) {
-        if (artistesFavoris.remove(artiste)) return false;
+        if (artistesFavoris.remove(artiste)) {
+            gouts().signalerArtiste(artiste, -ProfilGouts.ARTISTE_AIME);
+            return false;
+        }
         artistesFavoris.add(artiste);
+        gouts().signalerArtiste(artiste, ProfilGouts.ARTISTE_AIME);
         return true;
     }
 
