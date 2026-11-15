@@ -14,8 +14,16 @@ mkdir target\jpackage-input
 copy /y target\hmusic.jar target\jpackage-input\ >nul
 xcopy /e /i /q /y soundfonts target\jpackage-input\soundfonts >nul
 
+rem --- numero de version : lu dans le pom.xml (via le fichier genere par Maven) ---
+set VERSION=
+for /f "tokens=2 delims==" %%v in ('findstr /b "version=" target\classes\hmusic\version.properties') do set VERSION=%%v
+if "%VERSION%"=="" (
+  echo Version introuvable dans target\classes\hmusic\version.properties
+  exit /b 1
+)
+
 rem --- application + mini-Java (seulement les modules utiles) ---
-jpackage --type app-image --name hmusic --app-version 2.0 ^
+jpackage --type app-image --name hmusic --app-version %VERSION% ^
   --description "Musique selon ton humeur" --vendor "Luca De Chiara" ^
   --input target\jpackage-input --main-jar hmusic.jar --main-class hmusic.Main ^
   --icon packaging\hmusic.ico --dest target\dist ^
@@ -30,6 +38,6 @@ powershell -NoProfile -Command "Compress-Archive -Path 'target\dist\hmusic' -Des
 if errorlevel 1 exit /b 1
 
 echo.
-echo Version Windows prete :
+echo Version Windows %VERSION% prete :
 echo   - a tester : target\dist\hmusic\hmusic.exe
-echo   - a publier sur GitHub (Releases) : target\hmusic-windows.zip
+echo   - a publier sur GitHub (Releases) avec le tag v%VERSION% : target\hmusic-windows.zip

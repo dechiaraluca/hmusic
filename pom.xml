@@ -6,7 +6,9 @@
 
     <groupId>hmusic</groupId>
     <artifactId>hmusic</artifactId>
-    <version>2.0</version>
+    <!-- Seul endroit où changer la version : l'appli, dist.bat et la vérification des mises à jour la lisent ici.
+         Le tag de la release GitHub doit être « v » + cette version (ex. v2.4). -->
+    <version>2.4</version>
     <name>hmusic</name>
     <description>Musique selon l'humeur : composition générative + écoute de vrais morceaux (Jamendo)</description>
 
@@ -45,6 +47,23 @@
 
     <build>
         <finalName>hmusic</finalName>
+        <resources>
+            <!-- On remplace ${project.version} uniquement dans version.properties -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>hmusic/version.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>hmusic/version.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -27,6 +27,10 @@ Le projet s'ouvre aussi directement dans IntelliJ, Eclipse ou VS Code (projet Ma
 - `dist.bat` fabrique `target\hmusic-windows.zip` : un dossier avec `hmusic.exe`, Java intégré (`jpackage`) et
   la banque de sons. Rien à installer pour la personne qui le télécharge. Ce zip est publié dans les
   *Releases* GitHub.
+- **Mises à jour** : au démarrage, hmusic compare sa version (celle du `pom.xml`) au tag de la dernière
+  release GitHub et propose de télécharger la nouvelle si elle est plus récente. Pour publier une version :
+  augmenter `<version>` dans `pom.xml`, lancer `dist.bat`, puis créer la release avec le tag `v` + version
+  (ex. `v2.4`) et y joindre `hmusic-windows.zip`.
 - `site/` contient la page de présentation (HTML statique), publiée par Netlify grâce à `netlify.toml`.
   Le bouton « Télécharger » pointe vers `releases/latest/download/hmusic-windows.zip`.
 

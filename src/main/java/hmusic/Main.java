@@ -1,6 +1,7 @@
 package hmusic;
 
 import hmusic.catalogue.Catalogue;
+import hmusic.config.MiseAJour;
 import hmusic.config.Settings;
 import hmusic.engine.MoodEngine;
 import hmusic.ia.HttpAiClient;
@@ -15,6 +16,11 @@ import hmusic.utilisateur.GestionUtilisateurs;
 import hmusic.utilisateur.Utilisateur;
 
 import javax.swing.*;
+import java.awt.Desktop;
+import java.awt.Window;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
@@ -36,6 +42,9 @@ public final class Main {
             }
         });
 
+        // Recherche d'une nouvelle version sur GitHub, elle aussi en arrière-plan.
+        CompletableFuture<Optional<MiseAJour.Nouveaute>> miseAJour = CompletableFuture.supplyAsync(MiseAJour::verifier);
+
         SwingUtilities.invokeLater(() -> {
             Theme.install();
             ListenController listen = new ListenController(new Settings());
@@ -43,7 +52,29 @@ public final class Main {
             Catalogue catalogue = Catalogue.charger(Catalogue.FICHIER);
             Recommandeur recommandeur = choisirRecommandeur();
             ouvrirSession(moteur, listen, comptes, catalogue, recommandeur);
+            // une fois connecté (fenêtre principale ouverte), on prévient s'il y a mieux
+            miseAJour.thenAccept(n -> n.ifPresent(v -> SwingUtilities.invokeLater(() -> proposerMiseAJour(v))));
         });
+    }
+
+    /** Petite fenêtre « nouvelle version disponible », avec un bouton qui ouvre la page de téléchargement. */
+    private static void proposerMiseAJour(MiseAJour.Nouveaute n) {
+        Window parent = Arrays.stream(Window.getWindows()).filter(w -> w instanceof MainWindow && w.isShowing())
+                .findFirst().orElse(null);
+        Object[] choix = {"Télécharger", "Plus tard"};
+        int r = JOptionPane.showOptionDialog(parent,
+                "La version " + n.version() + " de hmusic est disponible (tu as la " + MiseAJour.versionActuelle() + ").\n"
+                        + "Télécharge le nouveau zip et remplace l'ancien dossier hmusic : tes comptes et réglages sont conservés.",
+                "Mise à jour disponible", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE,
+                null, choix, choix[0]);
+        if (r == 0) {
+            try {
+                Desktop.getDesktop().browse(URI.create(n.page()));
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(parent, "Ouvre cette adresse dans ton navigateur :\n" + n.page(),
+                        "hmusic", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
     }
 
     /**
