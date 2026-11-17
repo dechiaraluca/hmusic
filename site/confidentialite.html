@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidentialité — hmusic</title>
+<meta name="description" content="Politique de confidentialité de l'application hmusic : quelles données sont gardées sur ton ordinateur et quels services en ligne sont contactés.">
+<link rel="icon" type="image/png" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1014; --card: #17191f; --border: #2a2d36;
+    --text: #f2f3f5; --muted: #8d93a0; --accent: #8b6cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: Inter, "Segoe UI", system-ui, sans-serif; line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .wrap { width: min(760px, 100% - 32px); margin-inline: auto; }
+  nav { border-bottom: 1px solid var(--border); }
+  nav .wrap { display: flex; align-items: center; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px;
+           text-decoration: none; color: var(--text); }
+  .brand img { width: 32px; height: 32px; }
+  main { padding: 56px 0 72px; }
+  h1 { font-size: clamp(30px, 6vw, 42px); line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .maj { color: var(--muted); margin: 0 0 40px; }
+  h2 { font-size: 20px; margin: 40px 0 10px; }
+  p, li { color: #d4d7de; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  .resume { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 20px 24px; }
+  .resume p { margin: 0; color: var(--text); }
+  code { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px;
+         font-size: .92em; overflow-wrap: anywhere; }
+  footer { border-top: 1px solid var(--border); padding: 24px 0; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./"><img src="images/logo.png" alt="">hmusic</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <h1>Politique de confidentialité</h1>
+  <p class="maj">Application hmusic pour Windows · mise à jour le 17 novembre 2026</p>
+
+  <div class="resume">
+    <p>hmusic ne collecte aucune donnée personnelle. Tout ce que tu crées dans l'application reste sur ton
+      ordinateur. Il n'y a ni publicité, ni statistiques d'utilisation, ni compte en ligne.</p>
+  </div>
+
+  <h2>Ce qui est enregistré sur ton ordinateur</h2>
+  <p>L'application garde ses fichiers dans le dossier <code>.hmusic</code> de ton dossier utilisateur
+    (par exemple <code>C:\Users\toi\.hmusic</code>). Ces fichiers ne sont envoyés nulle part :</p>
+  <ul>
+    <li>les comptes créés dans l'application : nom d'utilisateur et une <strong>empreinte</strong> du mot de passe
+      (SHA-256 avec sel), jamais le mot de passe lui-même ;</li>
+    <li>le journal de tes humeurs et tes goûts musicaux, qui servent au bilan mensuel et aux recommandations ;</li>
+    <li>les réglages, dont la clé Jamendo que tu as saisie pour le mode Écouter.</li>
+  </ul>
+
+  <h2>Les services en ligne contactés</h2>
+  <ul>
+    <li><strong>Jamendo</strong> (<a href="https://www.jamendo.com">jamendo.com</a>), seulement en mode Écouter :
+      l'application envoie l'humeur choisie sous forme de mots-clés pour trouver des morceaux, puis télécharge
+      leur musique et leur pochette. Jamendo voit donc ton adresse IP, comme pour tout site web.</li>
+    <li><strong>Groq</strong> (service d'IA), seulement si tu as configuré toi-même une clé dans la variable
+      d'environnement <code>AI_API_KEY</code> : l'humeur choisie et une liste de titres de morceaux sont envoyées
+      pour composer une playlist. Aucune information sur ton compte n'est envoyée.</li>
+    <li><strong>GitHub</strong>, seulement pour la version téléchargée en zip : au démarrage, l'application
+      demande quel est le numéro de la dernière version. La version du Microsoft Store ne le fait pas,
+      c'est le Store qui la met à jour.</li>
+  </ul>
+  <p>Ces services appliquent leur propre politique de confidentialité.</p>
+
+  <h2>Supprimer tes données</h2>
+  <p>Supprime le dossier <code>.hmusic</code> de ton dossier utilisateur. Désinstaller l'application ne le
+    supprime pas, pour que tu retrouves tes comptes si tu la réinstalles.</p>
+
+  <h2>Enfants</h2>
+  <p>hmusic ne demande ni âge, ni adresse e-mail, ni aucune information d'identité, et ne contient aucune
+    publicité.</p>
+
+  <h2>Contact</h2>
+  <p>Pour toute question sur cette politique, ouvre un ticket sur
+    <a href="https://github.com/dechiaraluca/hmusic/issues">la page GitHub du projet</a>.</p>
+</main>
+
+<footer>
+  <div class="wrap"><a href="./">← Retour à hmusic</a></div>
+</footer>
+
+</body>
+</html>

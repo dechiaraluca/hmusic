@@ -27,6 +27,13 @@ class MiseAJourTest {
     }
 
     @Test
+    void reconnaitUneInstallationDepuisLeStore() {
+        assertTrue(MiseAJour.estDansWindowsApps(
+                "/C:/Program%20Files/WindowsApps/12345Luca.hmusic_2.4.0.0_x64__abc/app/hmusic.jar"));
+        assertFalse(MiseAJour.estDansWindowsApps("/C:/Users/luca/Downloads/hmusic/app/hmusic.jar"));
+    }
+
+    @Test
     void laVersionVientDuPom() {
         // les tests tournent après le filtrage des ressources par Maven
         assertNotEquals("dev", MiseAJour.versionActuelle());

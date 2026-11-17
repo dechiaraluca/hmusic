@@ -47,7 +47,8 @@ public final class MiseAJour {
      */
     public static Optional<Nouveaute> verifier() {
         String actuelle = versionActuelle();
-        if (actuelle.equals("dev")) return Optional.empty();
+        // la version du Microsoft Store est mise à jour par le Store lui-même
+        if (actuelle.equals("dev") || estVersionStore()) return Optional.empty();
         try {
             HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
             HttpRequest req = HttpRequest.newBuilder(URI.create(API_DERNIERE))
@@ -66,6 +67,23 @@ public final class MiseAJour {
         } catch (Exception e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Vrai si l'application a été installée depuis le Microsoft Store : Windows range alors
+     * les applications MSIX dans un dossier « WindowsApps ».
+     */
+    public static boolean estVersionStore() {
+        try {
+            String chemin = MiseAJour.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            return estDansWindowsApps(chemin);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    static boolean estDansWindowsApps(String chemin) {
+        return chemin.replace('\\', '/').toLowerCase().contains("/windowsapps/");
     }
 
     /**

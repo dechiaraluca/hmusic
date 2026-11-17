@@ -31,6 +31,11 @@ Le projet s'ouvre aussi directement dans IntelliJ, Eclipse ou VS Code (projet Ma
   release GitHub et propose de télécharger la nouvelle si elle est plus récente. Pour publier une version :
   augmenter `<version>` dans `pom.xml`, lancer `dist.bat`, puis créer la release avec le tag `v` + version
   (ex. `v2.4`) et y joindre `hmusic-windows.zip`.
+- **Microsoft Store** : `store.bat` fabrique `target\store\hmusic-<version>.msix` à partir de la même
+  version autonome (il télécharge au premier lancement l'outil `makeappx` du Windows SDK). Les valeurs
+  d'identité données par Partner Center vont dans `packaging\store\store.properties`. Le Store signe le
+  paquet et le met à jour lui-même ; la version Store ne vérifie donc pas GitHub. La politique de
+  confidentialité demandée par le Store est `site/confidentialite.html`.
 - `site/` contient la page de présentation (HTML statique), publiée par Netlify grâce à `netlify.toml`.
   Le bouton « Télécharger » pointe vers `releases/latest/download/hmusic-windows.zip`.
 
