@@ -1,5 +1,6 @@
 package hmusic.ui;
 
+import hmusic.config.Liens;
 import hmusic.model.Mood;
 import hmusic.utilisateur.Admin;
 import hmusic.utilisateur.OptionMenu;
@@ -23,6 +24,7 @@ import java.util.function.Consumer;
 public class ProfilBouton extends JComponent {
 
     private static final Color COULEUR_ADMIN = new Color(0xFF7A59);
+    private static final Color COULEUR_SOUTIEN = new Color(0xFF6FA5);
 
     private final Utilisateur utilisateur;
     private Color couleurHumeur = Mood.NEUTRAL.color();
@@ -57,16 +59,26 @@ public class ProfilBouton extends JComponent {
                 new EmptyBorder(4, 0, 4, 0)));
         for (OptionMenu option : utilisateur.menu()) {
             if (option == OptionMenu.JOURNAL) popup.addSeparator();
-            JMenuItem item = new JMenuItem(option.libelle());
-            item.setFont(Theme.font(Font.PLAIN, 13.5f));
-            item.setForeground(option == OptionMenu.DECONNEXION ? Dialogues.ERREUR : Theme.TEXT);
-            item.setBackground(Theme.CARD_HI);
-            item.setOpaque(true);
-            item.setBorder(new EmptyBorder(7, 16, 7, 40));
-            item.addActionListener(e -> onOption.accept(option));
-            popup.add(item);
+            if (option == OptionMenu.DECONNEXION) {
+                // lien vers la page de dons : ce n'est pas une action du compte, il n'est donc pas dans OptionMenu
+                popup.addSeparator();
+                popup.add(item("Soutenir hmusic", COULEUR_SOUTIEN, () -> Theme.openLink(Liens.SOUTENIR)));
+            }
+            Color couleur = option == OptionMenu.DECONNEXION ? Dialogues.ERREUR : Theme.TEXT;
+            popup.add(item(option.libelle(), couleur, () -> onOption.accept(option)));
         }
         return popup;
+    }
+
+    private static JMenuItem item(String libelle, Color couleur, Runnable action) {
+        JMenuItem item = new JMenuItem(libelle);
+        item.setFont(Theme.font(Font.PLAIN, 13.5f));
+        item.setForeground(couleur);
+        item.setBackground(Theme.CARD_HI);
+        item.setOpaque(true);
+        item.setBorder(new EmptyBorder(7, 16, 7, 40));
+        item.addActionListener(e -> action.run());
+        return item;
     }
 
     @Override public Dimension getPreferredSize() {

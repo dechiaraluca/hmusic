@@ -36,6 +36,8 @@ Le projet s'ouvre aussi directement dans IntelliJ, Eclipse ou VS Code (projet Ma
   d'identité données par Partner Center vont dans `packaging\store\store.properties`. Le Store signe le
   paquet et le met à jour lui-même ; la version Store ne vérifie donc pas GitHub. La politique de
   confidentialité demandée par le Store est `site/confidentialite.html`.
+- **Soutenir le projet** : le lien Ko-fi est dans `hmusic.config.Liens` (entrée « Soutenir hmusic » du menu
+  du profil), dans `site/index.html` et dans `.github/FUNDING.yml` (bouton « Sponsor » de GitHub).
 - `site/` contient la page de présentation (HTML statique), publiée par Netlify grâce à `netlify.toml`.
   Le bouton « Télécharger » pointe vers `releases/latest/download/hmusic-windows.zip`.
 
